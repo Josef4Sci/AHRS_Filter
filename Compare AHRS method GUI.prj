@@ -1,0 +1,106 @@
+<deployment-project plugin="plugin.apptool" plugin-version="1.0">
+  <configuration build-checksum="2897891225" file="C:\Users\josef\Disk Google\skola_phd\Disertace\Matlab\Testy\GUI_App\Compare AHRS method GUI.prj" location="C:\Users\josef\Disk Google\skola_phd\Disertace\Matlab\Testy\GUI_App" name="Compare AHRS method GUI" target="target.mlapps" target-name="Package App">
+    <param.appname>Compare AHRS method GUI</param.appname>
+    <param.authnamewatermark>Josef Justa</param.authnamewatermark>
+    <param.email />
+    <param.company />
+    <param.icon />
+    <param.icons />
+    <param.summary />
+    <param.description />
+    <param.screenshot />
+    <param.version>1.0</param.version>
+    <param.products.name />
+    <param.products.id />
+    <param.products.version />
+    <param.platforms />
+    <param.output>C:\Users\josef\Disk Google\skola_phd\Disertace\Matlab\Testy\GUI_App</param.output>
+    <param.guid>2f265d0c-67c5-4620-b083-4b0f22edfeda</param.guid>
+    <unset>
+      <param.email />
+      <param.company />
+      <param.icon />
+      <param.icons />
+      <param.summary />
+      <param.description />
+      <param.screenshot />
+      <param.version />
+      <param.products.name />
+      <param.products.id />
+      <param.products.version />
+      <param.platforms />
+      <param.output />
+    </unset>
+    <fileset.main>
+      <file>${PROJECT_ROOT}\App1.mlapp</file>
+    </fileset.main>
+    <fileset.depfun>
+      <file>C:\Users\josef\Disk Google\skola_phd\Disertace\Matlab\Testy\AccMagQ\measurement_quaternion_acc_mag.m</file>
+      <file>${PROJECT_ROOT}\datasetTestingFunctionSingle.m</file>
+      <file>${PROJECT_ROOT}\ExampleScriptVicon2.m</file>
+      <file>${PROJECT_ROOT}\Filters\JinWuKF_AHRSreal2.m</file>
+      <file>${PROJECT_ROOT}\Filters\JustaAHRSPure.m</file>
+      <file>${PROJECT_ROOT}\Filters\JustaAHRSPureFast.m</file>
+      <file>${PROJECT_ROOT}\Filters\JustaAHRSPureFastConstantCorr.m</file>
+      <file>${PROJECT_ROOT}\Filters\JustaAHRSPureFastLinearCorr.m</file>
+      <file>${PROJECT_ROOT}\Filters\kalman_update.m</file>
+      <file>${PROJECT_ROOT}\Filters\MadgwickAHRS3.m</file>
+      <file>${PROJECT_ROOT}\Filters\MadgwickAHRSclanek.m</file>
+      <file>${PROJECT_ROOT}\Filters\Valenti_AHRS.m</file>
+      <file>${PROJECT_ROOT}\optimFilterParams.m</file>
+      <file>${PROJECT_ROOT}\quaternion_library\quaternConj.m</file>
+      <file>${PROJECT_ROOT}\quaternion_library\quaternProd.m</file>
+      <file>C:\Users\josef\Disk Google\skola_phd\Disertace\Matlab\Testy\startApp.m</file>
+    </fileset.depfun>
+    <fileset.resources />
+    <fileset.package />
+    <build-deliverables>
+      <file location="C:\Users\josef\Disk Google\skola_phd\Disertace\Matlab\Testy" name="GUI_App" optional="false">C:\Users\josef\Disk Google\skola_phd\Disertace\Matlab\Testy\GUI_App</file>
+    </build-deliverables>
+    <workflow />
+    <matlab>
+      <root>C:\Program Files\MATLAB\R2016a</root>
+      <toolboxes>
+        <toolbox name="fixedpoint" />
+        <toolbox name="matlabcoder" />
+        <toolbox name="matlabhdlcoder" />
+        <toolbox name="embeddedcoder" />
+      </toolboxes>
+      <toolbox>
+        <fixedpoint>
+          <enabled>true</enabled>
+        </fixedpoint>
+      </toolbox>
+      <toolbox>
+        <matlabcoder>
+          <enabled>true</enabled>
+        </matlabcoder>
+      </toolbox>
+      <toolbox>
+        <matlabhdlcoder>
+          <enabled>true</enabled>
+        </matlabhdlcoder>
+      </toolbox>
+      <toolbox>
+        <embeddedcoder>
+          <enabled>true</enabled>
+        </embeddedcoder>
+      </toolbox>
+    </matlab>
+    <platform>
+      <unix>false</unix>
+      <mac>false</mac>
+      <windows>true</windows>
+      <win2k>false</win2k>
+      <winxp>false</winxp>
+      <vista>false</vista>
+      <linux>false</linux>
+      <solaris>false</solaris>
+      <osver>6.2</osver>
+      <os32>false</os32>
+      <os64>true</os64>
+      <arch>win64</arch>
+      <matlab>true</matlab>
+    </platform>
+  </configuration>
+</deployment-project>
