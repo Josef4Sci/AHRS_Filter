@@ -42,10 +42,6 @@ classdef JustaAHRSPureFast < handle
             qDot=0.5 *obj.SamplePeriod * quaternProd(q, [0 Gyroscope(1) Gyroscope(2) Gyroscope(3)]);
             qp= q + qDot;
             
-            
-%                         h = quaternProd(q, quaternProd([0 mag], quaternConj(q)));
-%                         mr = [norm([h(2) h(3)]) 0 h(4)]/norm([norm([h(2) h(3)]) 0 h(4)]);
-            
             R=[2*(0.5 - qp(3)^2 - qp(4)^2)   0   2*(qp(2)*qp(4) - qp(1)*qp(3))
                 2*(qp(2)*qp(3) - qp(1)*qp(4))  0  2*(qp(1)*qp(2) + qp(3)*qp(4))
                 2*(qp(1)*qp(3) + qp(2)*qp(4))  0  2*(0.5 - qp(2)^2 - qp(3)^2)];
@@ -53,9 +49,6 @@ classdef JustaAHRSPureFast < handle
             ar=[0 0 1];
             accMesPred=(R*ar')';
             
-%             alf=0.01;
-%             obj.mr_z= (1-alf)*obj.mr_z + alf*dot(accMesPred,mag);MesPred
-
             obj.mr_z= dot(accMesPred,mag);
             mr_x=sqrt(1-obj.mr_z^2);
             mr=[mr_x 0 obj.mr_z];            
@@ -67,11 +60,6 @@ classdef JustaAHRSPureFast < handle
             veca=ca/n;
             phia=(asin(n)*obj.gain);
             if(phia>obj.wAcc)
-%                 if((phia/obj.gain)>0.15)
-%                     phia=obj.wAcc;
-%                 else
-%                     phia=obj.wAcc;
-%                 end
                 phia=obj.wAcc;
             end
                         
