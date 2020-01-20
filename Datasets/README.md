@@ -3,5 +3,7 @@ This repository contains new AHRS filters (different variations of JustaAHRS) an
 <p align="center">
   <img src="https://user-images.githubusercontent.com/49363434/66477762-21d4c980-ea99-11e9-9d34-b125b1880f6f.png" width="600" title="Screen1">
 </p>
-
+<p align="center">
+  <img src="https://github.com/Josef4Sci/AHRS_Filter/blob/master/Datasets/Justa.png?raw=true" width="600" title="Justa dataset">
+</p>
 The implemented optimization methods are robust against stuck in local minimums (are not so precise)
