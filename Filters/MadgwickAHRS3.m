@@ -15,6 +15,7 @@ classdef MadgwickAHRS3 < handle
         accR=[0 0 0 0];
         test=[0 0 0 0];
         test2=[0 0 0 0];
+        iter=0;
     end
 
     %% Public methods
@@ -87,7 +88,7 @@ classdef MadgwickAHRS3 < handle
             step = (J'*F);
             step = step / norm(step);	% normalise step magnitude
             
-            obj.test=- obj.Beta *step*obj.SamplePeriod ;
+            obj.test=- obj.Beta *step*obj.SamplePeriod;
             % Compute rate of change of quaternion
             qDot = 0.5 * quaternProd(q, [0 Gyroscope(1) Gyroscope(2) Gyroscope(3)]) - obj.Beta * step';
 

@@ -10,6 +10,7 @@ classdef JustaAHRSPureFastLinearCorr < handle
         test=[0 0 0 0];
         test2=[0 0 0 0];
         
+        gain= 0.01;
         wAcc=0.00248;
         wMag=1.35e-04;
         
@@ -48,26 +49,24 @@ classdef JustaAHRSPureFastLinearCorr < handle
                 2*(qp(1)*qp(3) + qp(2)*qp(4))  2*(qp(3)*qp(4) - qp(1)*qp(2))  2*(0.5 - qp(2)^2 - qp(3)^2)];
             
             ar=[0 0 1];
-            accMesPred=(R*ar')';
+            accMesPred=(R*acc')';
             
-            obj.mr_z= dot(accMesPred,mag);
-            mr_x=sqrt(1-obj.mr_z^2);
-            mr=[mr_x 0 obj.mr_z];
             h = quaternProd(q, quaternProd([0 mag], quaternConj(q)));
-            mr = [norm([h(2) h(3)]) 0 h(4)];
-            magMesPred=(R*mr')';
+            mr = [norm([h(2) h(3)]) 0 h(4)]/norm([norm([h(2) h(3)]) 0 h(4)]);
             
-            ca=cross(acc,accMesPred);
+            magMesPred=(R*mag')';
+            
+            ca=cross(ar,accMesPred);
             n=norm(ca);
             veca=ca/n;
-            phia=(asin(n)*obj.wAcc);
             
-            cm=cross(mag,magMesPred);
+            cm=cross(mr,magMesPred);
             n=norm(cm);
-            vecm=cm/n;        
-            phim=(asin(n)*obj.wMag);            
-
-            qCor=[1 veca*phia/2+vecm*phim/2];
+            vecm=cm/n;
+            
+            im=veca*obj.wAcc/2+vecm*obj.wMag/2;
+            im2=im*sinc(norm(im)/pi);
+            qCor=[sqrt(1-sumsqr(im2)),im2];
             
             quat=quaternProd(qp,qCor);
             
@@ -89,21 +88,29 @@ classdef JustaAHRSPureFastLinearCorr < handle
             qDot=0.5 *obj.SamplePeriod * quaternProd(q, [0 Gyroscope(1) Gyroscope(2) Gyroscope(3)]);
             qp= q + qDot;
             
-            ar=[0 0 1];
-            
             R=[2*(0.5 - qp(3)^2 - qp(4)^2)   2*(qp(1)*qp(4) + qp(2)*qp(3))   2*(qp(2)*qp(4) - qp(1)*qp(3))
-                2*(qp(2)*q(3) - qp(1)*qp(4))  2*(0.5 - qp(2)^2 - qp(4)^2)  2*(qp(1)*qp(2) + qp(3)*qp(4))
+                2*(qp(2)*qp(3) - qp(1)*qp(4))  2*(0.5 - qp(2)^2 - qp(4)^2)  2*(qp(1)*qp(2) + qp(3)*qp(4))
                 2*(qp(1)*qp(3) + qp(2)*qp(4))  2*(qp(3)*qp(4) - qp(1)*qp(2))  2*(0.5 - qp(2)^2 - qp(3)^2)];
             
+            ar=[0 0 1];
             accMesPred=(R*ar')';
-            
             ca=cross(acc,accMesPred);
             n=norm(ca);
             veca=ca/n;
-            phia=(asin(n)*obj.wAcc);
+            obj.test(1:3) = ca;
+            if(abs(n)<0.9)
+                phia=(asin(n)*obj.gain);
+            else
+                phia=obj.gain;
+            end
+            if(phia>obj.wAcc)
+                phia=obj.wAcc;
+            end
             
-            qCor=[1 veca*phia/2];
+            % veca=(R'*veca')';
+            %obj.test2(1:3) = veca;
             
+            qCor=[1 phia*veca];
             quat=quaternProd(qp,qCor);
             
             if(quat(1)<0)
@@ -111,6 +118,9 @@ classdef JustaAHRSPureFastLinearCorr < handle
             end
             
             obj.Quaternion = quat/norm(quat);
+            if(~isreal(obj.Quaternion))
+               stop=4455;
+            end
         end
         
     end
