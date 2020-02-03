@@ -5,7 +5,7 @@ close all;                          % close all figures
 % clc;                                % clear the command terminal
 
 %%
-CompareMethods=[1 2 6]; % 1=YoungSooSuh, 2=madg, 3=valenti, 4=PRCF, 5=MadgwickAHRSclanek, 6=modif2
+CompareMethods=[1 2 3 6]; % 1=YoungSooSuh, 2=madg, 3=valenti, 4=PRCF, 5=MadgwickAHRSclanek, 6=modif2
 set=6;   %set1=1 set2=2 set12=3 set123=4 ALSdataset=5 synthetic2=6 synthetic3=7
 
 if(set<5)
@@ -66,8 +66,8 @@ end
 %%
 if(any(CompareMethods==3))
     AHRS = Valenti_AHRS();
-    AHRS.wAcc=0.01;%
-    AHRS.wMag=0.01;%
+    AHRS.wAcc=0.00116;%
+    AHRS.wMag=1.012e-7;%
     switch(set)
         case 4
             AHRS.wAcc=0.00608;%
