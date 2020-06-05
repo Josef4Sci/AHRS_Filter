@@ -27,7 +27,7 @@ classdef JustaAHRSPureFastLinearCorr < handle
                 elseif  strcmp(varargin{i}, 'Beta'), obj.Beta = varargin{i+1};
                 else error('Invalid argument');
                 end
-            end;
+            end
         end
         function obj = Update(obj, Gyroscope, Accelerometer, Magnetometer)
             q = obj.Quaternion; % short name local variable for readability
@@ -58,11 +58,11 @@ classdef JustaAHRSPureFastLinearCorr < handle
             
             ca=cross(ar,accMesPred);
             n=norm(ca);
-            veca=ca/n;
+            veca=ca;
             
             cm=cross(mr,magMesPred);
             n=norm(cm);
-            vecm=cm/n;
+            vecm=cm;
             
             im=veca*obj.wAcc/2+vecm*obj.wMag/2;
             im2=im*sinc(norm(im)/pi);

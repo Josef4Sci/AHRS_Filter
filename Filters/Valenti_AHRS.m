@@ -19,7 +19,7 @@ classdef Valenti_AHRS < handle
                 elseif  strcmp(varargin{i}, 'Quaternion'), obj.Quaternion = varargin{i+1};
                 else error('Invalid argument');
                 end
-            end;
+            end
         end
         function obj = Update(obj, Gyroscope, Accelerometer, Magnetometer)
             q = obj.Quaternion; % short name local variable for readability

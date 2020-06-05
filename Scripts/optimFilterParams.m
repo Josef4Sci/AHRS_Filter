@@ -37,6 +37,9 @@ switch(className)
     case 'MadgwickAHRS3'
         params=1;
         optimA=AHRS.Beta;
+    case 'Wilson_Madgwick_AHRS'
+        params=1;
+        optimA=AHRS.Beta;            
     case 'MadgwickAHRSclanek'
         params=1;
         optimA=AHRS.Beta;
@@ -58,10 +61,17 @@ switch(className)
         params=2;
         optimA=AHRS.wAcc;
         optimB=AHRS.wMag;
+    case 'JustaAHRSFunctionMultiParam'
+        params=10;
+        optimA=AHRS.wAcc;
+        optimB=AHRS.wMag;
     case 'Valenti_AHRS'
         params=2;
         optimA= AHRS.wAcc;
         optimB= AHRS.wMag;
+    case 'AdmirallWilsonAHRS'
+        params=1;
+        optimA= AHRS.Beta;
     case 'JinWuKF_AHRSreal2'
         params=2;
         optimA= AHRS.Sigma_a(1,1);
@@ -85,7 +95,7 @@ for sw=1:params
             %                     localB(localB>1) = 1;
             localB(localB<0) = 0;
         case 3
-            localC=[optimC+0.02,optimC*0.6,optimC*0.9,optimC*0.95,optimC*1.05,optimC*1.1,optimC*1.4,optimC-0.02,rand()*optimC*2];
+            localC=[optimC+0.02,optimC*0.6,optimC*0.9,optimC*0.95,optimC*1.05,optimC*1.1,optimC*1.4,optimC+0.02,rand()*optimC*2];
             %                     localC(localC>1) = 1;
             localC(localC<0) = 0;
     end
@@ -114,6 +124,8 @@ for sw=1:params
         switch(className)
             case 'MadgwickAHRS3'
                 AHRS.Beta=parameter(1);
+            case 'Wilson_Madgwick_AHRS'
+                AHRS.Beta=parameter(1);                
             case 'MadgwickAHRSclanek'
                 AHRS.Beta=parameter(1);
             case 'JustaAHRSPureFast'
@@ -126,6 +138,8 @@ for sw=1:params
             case 'Valenti_AHRS'
                 AHRS.wAcc=parameter(1);
                 AHRS.wMag=parameter(2);
+            case 'AdmirallWilsonAHRS'
+                AHRS.Beta=parameter(1);               
             case 'JustaAHRSPureFastLinearCorr'
                 AHRS.gain=parameter(1);
                 AHRS.wAcc=parameter(2);
@@ -172,7 +186,7 @@ for sw=1:params
 %             uhel=abs(sqrt(sum(filEul(:,1:2).^2,2))*180/pi);
             uhel=abs(2*atan2(sqrt(sum(qErr(:,2:4).^2,2)),qErr(:,1))*180/pi-0.8);
         else
-            uhel=abs(2*atan2(sqrt(sum(qErr(:,2:4).^2,2)),qErr(:,1))*180/pi-0.8);
+            uhel=abs(2*atan2(sqrt(sum(qErr(:,2:4).^2,2)),qErr(:,1))*180/pi-0.8); %-0.8
         end
         
         if(RMS==1)
@@ -199,6 +213,8 @@ end
 switch(className)
     case 'MadgwickAHRS3'
         AHRS.Beta=optimA;
+    case 'Wilson_Madgwick_AHRS'
+        AHRS.Beta=optimA;        
     case 'MadgwickAHRSclanek'
         AHRS.Beta=optimA;
     case 'JustaAHRSPureFast'
@@ -218,6 +234,8 @@ switch(className)
     case 'Valenti_AHRS'
         AHRS.wAcc=optimA;
         AHRS.wMag=optimB;
+    case 'AdmirallWilsonAHRS'
+        AHRS.Beta=optimA;     
     case 'JinWuKF_AHRSreal2'
         AHRS.Sigma_a=diag([1 1 1])*optimA;
         AHRS.Sigma_m=diag([1 1 1])*optimB;

@@ -70,7 +70,7 @@ if(~ExceptPeak)
 %         uhelM1=abs(sqrt(sum(filEul(:,1:2).^2,2))*180/pi);
         uhelM1=abs(2*atan2(sqrt(sum(qErr(:,2:4).^2,2)),qErr(:,1))*180/pi);
     else
-        uhelM1=abs(2*atan2(sqrt(sum(qErr(:,2:4).^2,2)),qErr(:,1))*180/pi);
+        uhelM1=abs(2*atan2(sqrt(sum(qErr(:,2:4).^2,2)),qErr(:,1))*180/pi-0.8);        
     end
 else
     if(set==1||set==5)

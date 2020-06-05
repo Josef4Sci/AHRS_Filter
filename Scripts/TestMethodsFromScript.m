@@ -5,8 +5,8 @@ close all;                          % close all figures
 % clc;                                % clear the command terminal
 
 %%
-CompareMethods=[1 2 3 6]; % 1=YoungSooSuh, 2=madg, 3=valenti, 4=PRCF, 5=MadgwickAHRSclanek, 6=modif2
-set=6;   %set1=1 set2=2 set12=3 set123=4 ALSdataset=5 synthetic2=6 synthetic3=7
+CompareMethods=[6]; % 1=YoungSooSuh, 2=madg, 3=valenti, 4=PRCF, 5=MadgwickAHRSclanek, 6=modif2
+set=4;   %set1=1 set2=2 set12=3 set123=4 ALSdataset=5 synthetic2=6 synthetic3=7
 
 if(set<5)
     load('Justa_dataset.mat')
@@ -45,22 +45,28 @@ if(any(CompareMethods==1))
     AHRS.rg= 0.0370;
     AHRS.ra= 0.000031;
     AHRS.rm= 0.0000235;    
+    
+%     AHRS.rg= 0.0005631158677499999;
+%     AHRS.ra= 0.0000018351604003246236;
+%     AHRS.rm= 0.0001794678715498521;  
+    
     AHRSs = cat(2,AHRSs,{AHRS});
 end
 %%
 if(any(CompareMethods==2))
-    switch(set)
-        case 1
-            AHRS = MadgwickAHRS3('Beta',0.011421);
-        case 2
-            AHRS = MadgwickAHRS3('Beta',0.03226);
-        case 3
-            AHRS = MadgwickAHRS3('Beta',0.016632);
-        case 4
-            AHRS = MadgwickAHRS3('Beta',0.02113);
-        case 6
-            AHRS = MadgwickAHRS3('Beta',0.0328);
-    end
+%     switch(set)
+%         case 1
+%             AHRS = MadgwickAHRS3('Beta',0.011421);
+%         case 2
+%             AHRS = MadgwickAHRS3('Beta',0.03226);
+%         case 3
+%             AHRS = MadgwickAHRS3('Beta',0.016630);
+%         case 4
+%             AHRS = MadgwickAHRS3('Beta',0.02113);
+%         case 6
+%             AHRS = MadgwickAHRS3('Beta',0.0328);
+%     end
+    AHRS = MadgwickAHRS3('Beta',0.011);
     AHRSs = cat(2,AHRSs,{AHRS});
 end
 %%
@@ -95,8 +101,8 @@ end
 %%
 if(any(CompareMethods==6))
     AHRS = JustaAHRSPureFastConstantCorr();
-    AHRS.wAcc=0.000351;%
-    AHRS.wMag=0.000294;%
+    AHRS.wAcc=0.0017;%
+    AHRS.wMag=0.0001;%
     AHRSs = cat(2,AHRSs,{AHRS});
 end
 
@@ -122,24 +128,32 @@ for method = 1:length(AHRSs)
         quaternionCountJ(t, :) = AHRSs{method}.Quaternion;
         
         %         if(CompareMethods==4 || CompareMethods==1 || CompareMethods==6)
-        %             test(t,:)=AHRS.test;
+                     test(t,:)=AHRS.test;
         %             test2(t,:)=AHRS.test2;
         %         end
     end
     qErr=quaternProd(qViconReference((start:myEnd),:),quaternConj(quaternionCountJ(start:myEnd,:)));
     qErr(qErr(:,1)<0,:)=-qErr(qErr(:,1)<0,:);
-    uhel=abs(2*atan2(sqrt(sum(qErr(:,2:4).^2,2)),qErr(:,1))*180/pi);
+    uhel=abs(2*atan2(sqrt(sum(qErr(:,2:4).^2,2)),qErr(:,1))*180/pi).^2;
     errorAngles=[errorAngles uhel];
     %scalErr(4,method)=0;
     scalErr(5,method)=mean(uhel);
 end
 
-
-[minim2,ind]= min(scalErr(5,:));
-disp(['Relative to the best:', num2str(scalErr(5,:)/minim2)]);
-
-plot(time(2:end),movmean(errorAngles,300));
-ylabel('MAE Error (deg)')
+figure('DefaultAxesFontSize',18,'Position',[50,50,floor(1900*1/1),600]);
+plot(time(1:end-1),quaternionCountJ,'LineWidth',1.0);
+xline(70.92,'LineWidth',1.0);
+xline(39.3,'LineWidth',1.0);
+title('Estimated quaternion FSCF')
+ylabel('[-]')
 xlabel('Time (s)')
-legend(names);
+legend('w','x','y','z');
+
+% [minim2,ind]= min(scalErr(5,:));
+% disp(['Relative to the best:', num2str(scalErr(5,:)/minim2)]);
+% figure
+% plot(time(start:myEnd),movmean(errorAngles,30));
+% ylabel('MAE Error (deg)')
+% xlabel('Time (s)')
+% legend(names);
 %% End of script

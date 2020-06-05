@@ -49,7 +49,7 @@ classdef YoungSooSuh_AHRS < handle
             AccNorm=Accelerometer./norm(Accelerometer);
             Magnetometer=Magnetometer./norm(Magnetometer);
 
-            cosAccMag=dot(AccNorm,Magnetometer);
+            cosAccMag=sind(-50);%dot(AccNorm,Magnetometer);
             sinAccMag=sqrt(1-cosAccMag^2);
             sinDipAng=cosAccMag;
             cosDipAng=sinAccMag;
@@ -66,7 +66,7 @@ classdef YoungSooSuh_AHRS < handle
                         +4*(bk_minus*cosDipAng-4*obj.gam*sinDipAng)*obj.kBet+bk_minus;    
             obj.gam=-(2*g*obj.kAlf-1)*(obj.gam+2*(obj.gam*cosDipAng-ak_minus*sinDipAng)*obj.kBet);
 
-            aRot=quaternProd(q_est,quaternProd([0 Accelerometer],quaternConj(q_est)));
+            aRot=quaternProd(q_est,quaternProd([0 AccNorm],quaternConj(q_est)));
             z1=(aRot(2:4)-[0 0 g]);
             z1=z1(1:2)';
             
@@ -81,7 +81,8 @@ classdef YoungSooSuh_AHRS < handle
             obj.test = [z1;z2;0]';
             obj.test2 = [aRot(2:4) 0];
 
-            q=quaternProd([1 obj.q_err],q_est);
+            normQ=[1 obj.q_err]/norm([1 obj.q_err]);
+            q=quaternProd(normQ, q_est);
 
             obj.Quaternion = q / norm(q); % normalise quaternion
         end

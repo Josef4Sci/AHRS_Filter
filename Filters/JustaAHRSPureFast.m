@@ -51,18 +51,18 @@ classdef JustaAHRSPureFast < handle
             ar=[0 0 1];
             accMesPred=(R*ar')';
             
-            obj.mr_z= dot(accMesPred,mag);
-            mr_x=sqrt(1-obj.mr_z^2);
-            mr=[mr_x 0 obj.mr_z];
-            
+            h = quaternProd(q, quaternProd([0 mag], quaternConj(q)));
+            mr = [norm([h(2) h(3)]) 0 h(4)]/norm([norm([h(2) h(3)]) 0 h(4)]);
+%             obj.mr_z= dot(accMesPred,mag);
+%             mr_x=sqrt(1-obj.mr_z^2);
+%             mr=[mr_x 0 obj.mr_z];
             magMesPred=(R*mr')';
-            
+                        
             ca=cross(acc,accMesPred);
             na=norm(ca);
             veca=ca/na;
             
             phia=(asin(na)*obj.gain);
-            
             
             if(phia>obj.wAcc)
                 phia=obj.wAcc;
@@ -73,7 +73,7 @@ classdef JustaAHRSPureFast < handle
             vecm=cm/n;
             
             phim=(asin(n)*obj.gain);            
-            
+
             if(phim>obj.wMag)
                 phim=obj.wMag;
             end

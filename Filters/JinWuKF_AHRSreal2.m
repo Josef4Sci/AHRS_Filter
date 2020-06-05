@@ -23,7 +23,7 @@ classdef JinWuKF_AHRSreal2 < handle
 
                 else error('Invalid argument');
                 end
-            end;
+            end
         end
         function obj = Update(obj, Gyroscope, Accelerometer, Magnetometer)
            
