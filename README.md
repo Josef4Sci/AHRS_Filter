@@ -5,3 +5,6 @@ This repository contains new AHRS filters (different variations of JustaAHRS) an
 </p>
 
 The implemented optimization methods are robust against stuck in local minimums (are not so precise)
+
+##Please Cite:
+JUSTA, Josef; ŠMÍDL, Václav; HAMÁČEK, Aleš. Fast AHRS Filter for Accelerometer, Magnetometer, and Gyroscope Combination with Separated Sensor Corrections. Sensors, 2020, 20.14: 3824.
