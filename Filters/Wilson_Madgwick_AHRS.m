@@ -2,7 +2,6 @@ classdef Wilson_Madgwick_AHRS< handle
 %Formulation of a new gradient descent MARG orientation algorithm:
 %Case study on robot teleoperation
 %
-%
 %   Date          Author          Notes
 %   30/5/2020     Josef Justa     Initial release
 

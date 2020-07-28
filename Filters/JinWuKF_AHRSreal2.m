@@ -1,5 +1,9 @@
 classdef JinWuKF_AHRSreal2 < handle
-
+% Guo, S.; Wu, J.; Wang, Z.; Qian, J. Novel MARG-Sensor Orientation Estimation Algorithm Using
+% Fast Kalman Filter. Journal of Sensors 2017, Article ID 8542153 
+% 
+% Implementation Justa, based on https://github.com/zarathustr/FKF
+    
     %% Public properties
     properties (Access = public)
         SamplePeriod = 1/256;

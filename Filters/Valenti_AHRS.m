@@ -1,6 +1,9 @@
 classdef Valenti_AHRS < handle
-    %UNTITLED Summary of this class goes here
-    %   Detailed explanation goes here
+    %Keeping a Good Attitude: A Quaternion-Based Orientation Filter for IMUs and MARGs
+    %August 2015Sensors 15(8):19302-19330
+    %DOI: 10.3390/s150819302
+    %
+    %Implemented by Justa
     
     properties
         SamplePeriod = 1/256;
@@ -75,12 +78,6 @@ classdef Valenti_AHRS < handle
             dqm = obj.scaleQuaternion(obj.wMag,dqm);
             obj.test=dqm;
             quat=quaternProd(q, dqm);
-%             quat=q;
-%             obj.test=[vx vy vz beta];
-            
-%             if(quat(1)<0)
-%                 quat=-quat;
-%             end
             
             obj.Quaternion = quat/norm(quat);
         end

@@ -1,6 +1,9 @@
 classdef JustaAHRSPure < handle
-    %UNTITLED Summary of this class goes here
-    %   Detailed explanation goes here
+%   JUSTA, Josef; ŠMÍDL, Václav; HAMÁÈEK, Aleš. Fast AHRS Filter for Accelerometer, Magnetometer, 
+%   and Gyroscope Combination with Separated Sensor Corrections. Sensors, 2020, 20.14: 3824.
+%
+%   Date          Author          Notes
+%   30/5/2020     Josef Justa     Initial release
     
     properties
         SamplePeriod = 1/256;

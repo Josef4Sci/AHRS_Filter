@@ -1,5 +1,8 @@
 classdef YoungSooSuh_AHRS < handle
-
+% Suh, Y.S. Simple-Structured Quaternion Estimator Separating Inertial and Magnetic Sensor Effects. 
+% IEEE, Transactions on Aerospace and Electronic Systems 2019, 55, 2698–2706.
+%
+% Implemented by Justa
 
     %% Public properties
     properties (Access = public)

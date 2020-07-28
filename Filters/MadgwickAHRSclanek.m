@@ -1,11 +1,6 @@
 classdef MadgwickAHRSclanek < handle
-%MADGWICKAHRS Implementation of Madgwick's IMU and AHRS algorithms
-%
-%   For more information see:
-%   http://www.x-io.co.uk/node/8#open_source_ahrs_and_imu_algorithms
-%
-%   Date          Author          Notes
-%   28/09/2011    SOH Madgwick    Initial release
+%Justa Implementation of Madgwick's IMU and AHRS algorithms based on first
+%part of paper (linear correction)
 
     %% Public properties
     properties (Access = public)
@@ -24,7 +19,7 @@ classdef MadgwickAHRSclanek < handle
                 elseif  strcmp(varargin{i}, 'Beta'), obj.Beta = varargin{i+1};
                 else error('Invalid argument');
                 end
-            end;
+            end
         end
         function obj = Update(obj, Gyroscope, Accelerometer, Magnetometer)
             q = obj.Quaternion; % short name local variable for readability
