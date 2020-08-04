@@ -47,9 +47,9 @@ classdef Wilson_Madgwick_AHRS< handle
             measureFused=cross(Accelerometer, Magnetometer);
             measureFused=measureFused/norm(measureFused);
             
-            error=     [2*(q(1)*q(4)+q(2)*q(3))- measureFused(1);
-                        q(1)^2 - q(2)^2 + q(3)^2 - q(4)^2 - measureFused(2);
-                        2*(q(3)*q(4)-q(1)*q(2) ) - measureFused(3)];
+            error=     [-2*(q(1)*q(4)+q(2)*q(3))- measureFused(1);
+                        -q(1)^2 + q(2)^2 - q(3)^2 + q(4)^2 - measureFused(2);
+                        -2*(q(3)*q(4)-q(1)*q(2) ) - measureFused(3)];
             J= -2*[
                 -q(4) -q(1) q(2);
                 -q(3) q(2) q(1);
