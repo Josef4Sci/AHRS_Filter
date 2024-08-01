@@ -34,7 +34,7 @@ function q = rotMat2quatern(R)
         [V,D] = eig(K);
         %p = find(max(D));
         %q = V(:,p)';
-        q(i,:) = V(:,4)';
+        q(i,:) = real(V(:,4)');
         q(i,:) = [q(i,4) q(i,1) q(i,2) q(i,3)];
     end
 end

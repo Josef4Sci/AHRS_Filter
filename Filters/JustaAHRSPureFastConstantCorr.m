@@ -15,6 +15,7 @@ classdef JustaAHRSPureFastConstantCorr < handle
         
         wAcc=0.00248;
         wMag=1.35e-04;
+        wC=1.35e-04;
         
         mr_z=0.895;
         
@@ -55,19 +56,29 @@ classdef JustaAHRSPureFastConstantCorr < handle
             
             h = quaternProd(q, quaternProd([0 mag], quaternConj(q)));
             mr = [norm([h(2) h(3)]) 0 h(4)]/norm([norm([h(2) h(3)]) 0 h(4)]);
-            obj.mr_z= dot(accMesPred,mag);
-            mr_x=sqrt(1-obj.mr_z^2);
-            mr=[mr_x 0 obj.mr_z];
+%             obj.mr_z= dot(accMesPred,mag);
+%             mr_x=sqrt(1-obj.mr_z^2);
+%             mr=[mr_x 0 obj.mr_z];
             magMesPred=(R*mr')';
             
             ca=cross(acc,accMesPred);
             veca=ca/norm(ca);
 
+            if(any(isnan(veca)))
+                veca=[0 0 0];                
+            end
+            
+
             cm=cross(mag,magMesPred);
             vecm=cm/norm(cm);
-            
+            if(any(isnan(vecm)))
+                vecm=[0 0 0];                
+            end
+
+            zh=-(sign(qp(4))-0.5)*obj.wC;
             qCor=[1 veca*obj.wAcc/2+vecm*obj.wMag/2];
-            
+            qCor(4)=qCor(4)+zh;
+
             quat=quaternProd(qp,qCor);
             
             %             quat=quatGyrPred;
