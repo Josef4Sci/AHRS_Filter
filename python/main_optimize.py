@@ -14,13 +14,13 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from optim_filter_params import FilterOptimizer
 from filters import (
-    MadgwickAHRS, JustaAHRSPure, JustaAHRSPureFast,
+    MadgwickAHRS, JustaAHRSPure, JustaAHRSv2, JustaAHRSPureFastClean,
     ValentiAHRS, WilsonMadgwickAHRS, AdmirallWilsonAHRS,
     YoungSooSuhAHRS, JinWuKFAHRS
 )
 
 
-def optimize_all_filters(dataset_name='Justa', use_rms=True, use_imu=False):
+def optimize_all_filters(dataset_name='Justa', use_rms=True, use_imu=False, max_iterations=1):
     """
     Optimize all available filters on a given dataset
     
@@ -32,7 +32,7 @@ def optimize_all_filters(dataset_name='Justa', use_rms=True, use_imu=False):
     # Define filters to optimize
     filters = [
         ('MadgwickAHRS', MadgwickAHRS(beta=0.1)),
-        ('JustaAHRSPureFast', JustaAHRSPureFast(gain=0.0528152, w_acc=0.00248, w_mag=1.35e-04)),
+        ('JustaAHRSv2', JustaAHRSv2(gain=0.0528152, w_acc=0.00248, w_mag=1.35e-04)),
         ('JustaAHRSPure', JustaAHRSPure(w_acc=0.00248, w_mag=1.35e-04)),
         ('ValentiAHRS', ValentiAHRS(w_acc=0.01, w_mag=0.01)),
         ('WilsonMadgwickAHRS', WilsonMadgwickAHRS(beta=0.1)),
@@ -86,7 +86,7 @@ def optimize_all_filters(dataset_name='Justa', use_rms=True, use_imu=False):
 
 
 def optimize_single_filter(filter_name='MadgwickAHRS', dataset_name='Justa', 
-                           use_rms=True, use_imu=False):
+                           use_rms=True, use_imu=False, max_iterations=1):
     """
     Optimize a single filter
     
@@ -95,11 +95,13 @@ def optimize_single_filter(filter_name='MadgwickAHRS', dataset_name='Justa',
         dataset_name: Name of dataset
         use_rms: Use RMS error metric
         use_imu: Use IMU-only mode
+        max_iterations: Maximum number of optimization iterations
     """
     # Create filter instance
     filter_map = {
         'MadgwickAHRS': MadgwickAHRS(beta=0.1),
-        'JustaAHRSPureFast': JustaAHRSPureFast(gain=0.0528152, w_acc=0.00248, w_mag=1.35e-04),
+        'JustaAHRSv2': JustaAHRSv2(gain=12.0, w_acc=0.00248, w_mag=1.35e-04),
+        'JustaAHRSPureFastClean': JustaAHRSPureFastClean(gain=0.0528152, w_acc=0.00248, w_mag=1.35e-04),
         'JustaAHRSPure': JustaAHRSPure(w_acc=0.00248, w_mag=1.35e-04),
         'ValentiAHRS': ValentiAHRS(w_acc=0.01, w_mag=0.01),
         'WilsonMadgwickAHRS': WilsonMadgwickAHRS(beta=0.1),
@@ -124,15 +126,16 @@ def optimize_single_filter(filter_name='MadgwickAHRS', dataset_name='Justa',
         use_imu=use_imu
     )
     
-    result = optimizer.optimize(max_iterations=1)
+    result = optimizer.optimize(max_iterations=max_iterations)
     
     return result
 
 
 if __name__ == '__main__':
     # Example 1: Optimize a single filter
-    print("Example 1: Optimize JustaAHRSPureFast filter on Justa dataset")
-    result = optimize_single_filter('JustaAHRSPureFast', 'Justa', use_rms=True, use_imu=False)
+    target_filter = 'JustaAHRSv2'
+    print(f"Example 1: Optimize {target_filter} filter on Justa dataset")
+    result = optimize_single_filter(target_filter, 'Justa', use_rms=True, use_imu=False, max_iterations=5)
     
     # Example 2: Optimize all filters (uncomment to run)
     # print("\n\nExample 2: Optimize all filters")

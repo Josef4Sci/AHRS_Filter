@@ -12,10 +12,11 @@ import os
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+from utils import eval_filter_on_dataset
 from quaternion_library import quatern_prod, quatern_conj
 from dataset_loader import DatasetLoader
 from filters import (
-    MadgwickAHRS, JustaAHRSPure, JustaAHRSPureFast,
+    MadgwickAHRS, JustaAHRSPure, JustaAHRSv2,
     ValentiAHRS, WilsonMadgwickAHRS, AdmirallWilsonAHRS,
     YoungSooSuhAHRS, JinWuKFAHRS
 )
@@ -77,11 +78,17 @@ class FilterOptimizer:
             return {'beta': self.filter.beta}, 1
         elif filter_class == 'AdmirallWilsonAHRS':
             return {'beta': self.filter.beta}, 1
-        elif filter_class == 'JustaAHRSPureFast':
+        elif filter_class == 'JustaAHRSv2':
             return {
-                'gain': self.filter.gain,
                 'w_acc': self.filter.w_acc,
-                'w_mag': self.filter.w_mag
+                'w_mag': self.filter.w_mag,
+                'gain': self.filter.gain
+            }, 3
+        elif filter_class == 'JustaAHRSPureFastClean':
+            return {
+                'w_acc': self.filter.w_acc,
+                'w_mag': self.filter.w_mag,
+                'gain': self.filter.gain
             }, 3
         elif filter_class == 'JustaAHRSPure':
             return {
@@ -122,14 +129,11 @@ class FilterOptimizer:
             self.filter.beta = params.get('beta', self.filter.beta)
         elif filter_class == 'AdmirallWilsonAHRS':
             self.filter.beta = params.get('beta', self.filter.beta)
-        elif filter_class == 'JustaAHRSPureFast':
+        elif filter_class == 'JustaAHRSv2' or filter_class == 'JustaAHRSPureFastClean':
+            self.filter.w_acc = params.get('w_acc', self.filter.w_acc)
+            self.filter.w_mag = params.get('w_mag', self.filter.w_mag)
             self.filter.gain = params.get('gain', self.filter.gain)
-            self.filter.w_acc = params.get('w_acc', self.filter.w_acc)
-            self.filter.w_mag = params.get('w_mag', self.filter.w_mag)
-        elif filter_class == 'JustaAHRSPure':
-            self.filter.w_acc = params.get('w_acc', self.filter.w_acc)
-            self.filter.w_mag = params.get('w_mag', self.filter.w_mag)
-        elif filter_class == 'ValentiAHRS':
+        elif filter_class == 'JustaAHRSPure' or filter_class == 'ValentiAHRS':
             self.filter.w_acc = params.get('w_acc', self.filter.w_acc)
             self.filter.w_mag = params.get('w_mag', self.filter.w_mag)
         elif filter_class == 'JinWuKFAHRS':
@@ -183,60 +187,10 @@ class FilterOptimizer:
         # Set parameters
         self._set_filter_params(params)
         
-        # Reset quaternion to reference at start
-        self.filter.quaternion = self.data['reference'][self.start_idx].copy()
-        
-        # Run filter through data
-        quaternion_result = np.zeros((self.end_idx - self.start_idx + 1, 4))
-        
-        for t in range(self.start_idx, self.end_idx + 1):
-            # Calculate sample period
-            if t == self.start_idx:
-                dt = self.data['time'][0]
-            else:
-                dt = self.data['time'][t] - self.data['time'][t-1]
-                
-            self.filter.sample_period = dt
-            
-            # Update filter
-            if self.use_imu:
-                self.filter.update_imu(
-                    self.data['gyroscope'][t],
-                    self.data['accelerometer'][t]
-                )
-            else:
-                self.filter.update(
-                    self.data['gyroscope'][t],
-                    self.data['accelerometer'][t],
-                    self.data['magnetometer'][t]
-                )
-                
-            quaternion_result[t - self.start_idx] = self.filter.quaternion
-            
-        # Calculate error
-        q_ref = self.data['reference'][self.start_idx:self.end_idx + 1]
-        q_err = quatern_prod(q_ref, quatern_conj(quaternion_result))
-        
-        # Ensure all quaternions have positive w component
-        q_err[q_err[:, 0] < 0] = -q_err[q_err[:, 0] < 0]
-        
-        # Calculate angular error
-        if self.use_imu:
-            angle_error = np.abs(2 * np.arctan2(
-                np.linalg.norm(q_err[:, 1:4], axis=1),
-                q_err[:, 0]
-            ) * 180 / np.pi - 0.8)
-        else:
-            angle_error = np.abs(2 * np.arctan2(
-                np.linalg.norm(q_err[:, 1:4], axis=1),
-                q_err[:, 0]
-            ) * 180 / np.pi - 0.8)
-            
-        # Use RMS or absolute error
-        if self.use_rms:
-            angle_error = angle_error ** 2
-            
-        return np.mean(angle_error)
+        quaternion_result, angle_err = eval_filter_on_dataset(
+            self.filter, self.data, use_imu=self.use_imu, use_square_err=self.use_rms)
+
+        return np.mean(angle_err)
         
     def optimize(self, max_iterations=1):
         """

@@ -26,12 +26,13 @@ def test_filter(filter_instance, filter_name):
     # Normalize accelerometer and magnetometer
     accelerometer = accelerometer / np.linalg.norm(accelerometer)
     magnetometer = magnetometer / np.linalg.norm(magnetometer)
+    dt = 1.0 / 256.0  # Sample period
     
     filter_instance.quaternion = np.array([1.0, 0.0, 0.0, 0.0])  # Reset quaternion
     
     try:
         # Update filter
-        filter_instance.update(gyroscope, accelerometer, magnetometer)
+        filter_instance.update(gyroscope, accelerometer, magnetometer, dt)
         
         # Check quaternion
         q = filter_instance.quaternion
@@ -46,7 +47,7 @@ def test_filter(filter_instance, filter_name):
             
         # Run a few more iterations
         for i in range(10):
-            filter_instance.update(gyroscope, accelerometer, magnetometer)
+            filter_instance.update(gyroscope, accelerometer, magnetometer, dt)
             
         q = filter_instance.quaternion
         print(f"  After 10 steps: {q}")

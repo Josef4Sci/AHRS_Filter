@@ -19,14 +19,13 @@ class ValentiAHRS:
     Valenti AHRS implementation
     """
     
-    def __init__(self, sample_period=1/256, quaternion=None, w_acc=0.01, w_mag=0.01):
-        self.sample_period = sample_period
+    def __init__(self, quaternion=None, w_acc=0.01, w_mag=0.01):
         self.quaternion = np.array([1.0, 0.0, 0.0, 0.0]) if quaternion is None else np.array(quaternion)
         self.w_acc = w_acc
         self.w_mag = w_mag
         self.gain = 0
         
-    def update(self, gyroscope, accelerometer, magnetometer):
+    def update(self, gyroscope, accelerometer, magnetometer, dt):
         """
         Update the filter with MARG sensor data
         
@@ -34,6 +33,7 @@ class ValentiAHRS:
             gyroscope: Gyroscope measurement [gx, gy, gz] in rad/s
             accelerometer: Accelerometer measurement [ax, ay, az]
             magnetometer: Magnetometer measurement [mx, my, mz]
+            dt: Sample period in seconds
         """
         q = self.quaternion
         
@@ -49,7 +49,7 @@ class ValentiAHRS:
         
         # Gyroscope prediction
         q_dot = 0.5 * quatern_prod(q, np.array([0, *gyroscope]))
-        quat_gyr_pred = q + q_dot * self.sample_period
+        quat_gyr_pred = q + q_dot * dt
         q_pred = quat_gyr_pred / np.linalg.norm(quat_gyr_pred)
         
         # Accelerometer correction

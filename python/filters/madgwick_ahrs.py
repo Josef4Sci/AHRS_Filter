@@ -17,12 +17,11 @@ class MadgwickAHRS:
     http://www.x-io.co.uk/node/8#open_source_ahrs_and_imu_algorithms
     """
     
-    def __init__(self, sample_period=1/256, quaternion=None, beta=0.1):
-        self.sample_period = sample_period
+    def __init__(self, quaternion=None, beta=0.1):
         self.quaternion = np.array([1.0, 0.0, 0.0, 0.0]) if quaternion is None else np.array(quaternion)
         self.beta = beta
         
-    def update(self, gyroscope, accelerometer, magnetometer):
+    def update(self, gyroscope, accelerometer, magnetometer, dt):
         """
         Update the filter with MARG sensor data
         
@@ -30,6 +29,7 @@ class MadgwickAHRS:
             gyroscope: Gyroscope measurement [gx, gy, gz] in rad/s
             accelerometer: Accelerometer measurement [ax, ay, az]
             magnetometer: Magnetometer measurement [mx, my, mz]
+            dt: Sample period in seconds
         """
         q = self.quaternion
         
@@ -73,16 +73,17 @@ class MadgwickAHRS:
         q_dot = 0.5 * quatern_prod(q, np.array([0, *gyroscope])) - self.beta * step
         
         # Integrate to yield quaternion
-        q = q + q_dot * self.sample_period
+        q = q + q_dot * dt
         self.quaternion = q / np.linalg.norm(q)
         
-    def update_imu(self, gyroscope, accelerometer):
+    def update_imu(self, gyroscope, accelerometer, dt):
         """
         Update the filter with IMU sensor data (no magnetometer)
         
         Args:
             gyroscope: Gyroscope measurement [gx, gy, gz] in rad/s
             accelerometer: Accelerometer measurement [ax, ay, az]
+            dt: Sample period in seconds
         """
         q = self.quaternion
         
@@ -111,5 +112,5 @@ class MadgwickAHRS:
         q_dot = 0.5 * quatern_prod(q, np.array([0, *gyroscope])) - self.beta * step
         
         # Integrate to yield quaternion
-        q = q + q_dot * self.sample_period
+        q = q + q_dot * dt
         self.quaternion = q / np.linalg.norm(q)

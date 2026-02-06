@@ -20,8 +20,7 @@ class JinWuKFAHRS:
     Jin Wu Kalman Filter AHRS implementation
     """
     
-    def __init__(self, sample_period=1/256, quaternion=None, sigma_g=1, sigma_a=3, sigma_m=500):
-        self.sample_period = sample_period
+    def __init__(self, quaternion=None, sigma_g=1, sigma_a=3, sigma_m=500):
         self.quaternion = np.array([0.5, -0.5, -0.5, -0.5]) if quaternion is None else np.array(quaternion)
         
         self.sigma_g = sigma_g * np.eye(3)
@@ -30,7 +29,7 @@ class JinWuKFAHRS:
         
         self.Pk = 0.001 * np.eye(4)
         
-    def update(self, gyroscope, accelerometer, magnetometer):
+    def update(self, gyroscope, accelerometer, magnetometer, dt):
         """
         Update the filter with MARG sensor data using Kalman filter
         
@@ -38,8 +37,8 @@ class JinWuKFAHRS:
             gyroscope: Gyroscope measurement [gx, gy, gz] in rad/s
             accelerometer: Accelerometer measurement [ax, ay, az]
             magnetometer: Magnetometer measurement [mx, my, mz]
+            dt: Sample period in seconds
         """
-        dt = self.sample_period
         qq = self.quaternion
         q0, q1, q2, q3 = qq
         

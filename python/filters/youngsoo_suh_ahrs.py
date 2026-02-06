@@ -18,8 +18,7 @@ class YoungSooSuhAHRS:
     YoungSoo Suh AHRS implementation
     """
     
-    def __init__(self, sample_period=1/256, quaternion=None, rg=0.317, ra=0.0004156, rm=0.00057):
-        self.sample_period = sample_period
+    def __init__(self, quaternion=None, rg=0.317, ra=0.0004156, rm=0.00057):
         self.quaternion = np.array([1.0, 0.0, 0.0, 0.0]) if quaternion is None else np.array(quaternion)
         
         self.rg = rg
@@ -35,7 +34,7 @@ class YoungSooSuhAHRS:
         self.k_alf = 0
         self.k_bet = 0
         
-    def update(self, gyroscope, accelerometer, magnetometer):
+    def update(self, gyroscope, accelerometer, magnetometer, dt):
         """
         Update the filter with MARG sensor data
         
@@ -43,9 +42,9 @@ class YoungSooSuhAHRS:
             gyroscope: Gyroscope measurement [gx, gy, gz] in rad/s
             accelerometer: Accelerometer measurement [ax, ay, az]
             magnetometer: Magnetometer measurement [mx, my, mz]
+            dt: Sample period in seconds
         """
         g = 1
-        dt = self.sample_period
         q = self.quaternion
         
         # Gyroscope prediction

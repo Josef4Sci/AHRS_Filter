@@ -14,7 +14,8 @@ def example_1_basic_filter_usage():
     import numpy as np
     
     # Create filter
-    ahrs = MadgwickAHRS(sample_period=1/100, beta=0.1)  # 100 Hz
+    ahrs = MadgwickAHRS(beta=0.1)
+    dt = 1.0 / 100.0  # 100 Hz sample period
     
     # Example sensor readings (replace with your actual data)
     gyroscope = np.array([0.1, 0.05, -0.02])      # rad/s
@@ -26,7 +27,7 @@ def example_1_basic_filter_usage():
     magnetometer = magnetometer / np.linalg.norm(magnetometer)
     
     # Update filter
-    ahrs.update(gyroscope, accelerometer, magnetometer)
+    ahrs.update(gyroscope, accelerometer, magnetometer, dt)
     
     # Get orientation as quaternion [w, x, y, z]
     print(f"Orientation quaternion: {ahrs.quaternion}")
@@ -158,14 +159,12 @@ def example_5_custom_csv():
         else:
             dt = df.loc[i, 'time'] - df.loc[i-1, 'time']
         
-        ahrs.sample_period = dt
-        
         # Normalize accelerometer and magnetometer
         accel = accel / np.linalg.norm(accel)
         mag = mag / np.linalg.norm(mag)
         
         # Update filter
-        ahrs.update(gyro, accel, mag)
+        ahrs.update(gyro, accel, mag, dt)
         
         # Store result
         orientations.append(ahrs.quaternion.copy())
@@ -227,13 +226,12 @@ def example_7_realtime_simulation():
         else:
             dt = data['time'][i] - data['time'][i-1]
         
-        ahrs.sample_period = dt
-        
         # Update
         ahrs.update(
             data['gyroscope'][i],
             data['accelerometer'][i] / np.linalg.norm(data['accelerometer'][i]),
-            data['magnetometer'][i] / np.linalg.norm(data['magnetometer'][i])
+            data['magnetometer'][i] / np.linalg.norm(data['magnetometer'][i]),
+            dt
         )
         
         # Print every 10 samples

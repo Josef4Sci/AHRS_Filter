@@ -3,8 +3,28 @@ Quaternion library functions for AHRS filters
 Ported from MATLAB to Python
 """
 import numpy as np
+from numba import jit
 
+@jit(nopython=True, cache=True, fastmath=True, inline='always')
+def fast_norm(v):
+    """Faster norm calculation for small vectors"""
+    return np.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2])
 
+@jit(nopython=True, cache=True, fastmath=True, inline='always')
+def fast_normalize_3d(v):
+    """Fast normalization with early return check"""
+    norm = fast_norm(v)
+    if norm < 1e-10:  # Avoid division by zero
+        return np.zeros(3, dtype=np.float64), False
+    return v / norm, True
+
+@jit(nopython=True, cache=True, fastmath=True, inline='always')
+def fast_normalize_4d(v):
+    """Fast 4D normalization"""
+    norm = np.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2] + v[3]*v[3])
+    return v / norm
+
+@jit(nopython=True, cache=True)
 def quaternion_derivative(q, gyro):
     w, x, y, z = q
     wx, wy, wz = gyro
@@ -16,7 +36,7 @@ def quaternion_derivative(q, gyro):
     ])
     return q_dot
 
-
+@jit(nopython=True, cache=True)
 def integrate_rk4(q, gyro, dt):
     """
     4th order Runge-Kutta integration for quaternion from previous answer.
@@ -55,7 +75,7 @@ def integrate_rk4(q, gyro, dt):
     
     return q_new
 
-
+@jit(nopython=True, cache=True)
 def quaternion_rotate_vector(q, v):
     """
     Rotate vector v by quaternion q.
@@ -79,7 +99,7 @@ def quaternion_rotate_vector(q, v):
     result = quatern_prod_single(q_conj, quatern_prod_single(v_quat, q))
     return result[1:4]
 
-
+@jit(nopython=True, cache=True)
 def quatern_prod(a, b):
     """
     Calculates the quaternion product of quaternion a and b.
@@ -106,7 +126,7 @@ def quatern_prod(a, b):
     
     return ab
 
-
+@jit(nopython=True, cache=True)
 def quatern_prod_single(a, b):
     """
     Calculates the quaternion product of quaternion a and b.
@@ -130,7 +150,7 @@ def quatern_prod_single(a, b):
     return ab
 
 
-
+@jit(nopython=True, cache=True)
 def quatern_conj_single(q):
     """
     Calculate quaternion conjugate.
@@ -145,7 +165,7 @@ def quatern_conj_single(q):
     quat_c[1:] = -quat_c[1:]
     return quat_c
 
-
+@jit(nopython=True, cache=True)
 def quatern_conj(q):
     """
     Calculate quaternion conjugate.
