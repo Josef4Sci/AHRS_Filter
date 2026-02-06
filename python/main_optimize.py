@@ -131,7 +131,7 @@ def optimize_single_filter(filter_name='MadgwickAHRS', dataset_name='Justa',
 
 if __name__ == '__main__':
     # Example 1: Optimize a single filter
-    print("Example 1: Optimize Madgwick filter on Justa dataset")
+    print("Example 1: Optimize JustaAHRSPureFast filter on Justa dataset")
     result = optimize_single_filter('JustaAHRSPureFast', 'Justa', use_rms=True, use_imu=False)
     
     # Example 2: Optimize all filters (uncomment to run)
