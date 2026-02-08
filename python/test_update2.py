@@ -9,48 +9,70 @@ import pandas as pd
 from utils import angle_error, eval_filter_on_dataset
 from filters import (JustaAHRSv2, JustaAHRSPure)
 import time
+import os
 
 mat = scipy.io.loadmat('Datasets/Synthetic2.mat')
 
-n ='01_undisturbed_slow_rotation_A.mat'
-n ='23_undisturbed_fast_combined_360s.mat'
-dl= DatasetLoader()
-dat = dl.load_broad_dataset(n)
+folder = 'Datasets\\broad\\data_mat'
 
-b = vqf.BasicVQF(1.0/dat['mean_sampling_rate'])
+files = os.listdir(folder)
+files_blacklist = []
+files_whitelist = []
+for file in files:
+    if file.endswith('.mat'):
+        # n ='01_undisturbed_slow_rotation_A.mat'
+        # n= '02_undisturbed_slow_rotation_B.mat'
+        # n= '07_undisturbed_fast_rotation_B.mat'
+        # n ='22_undisturbed_fast_combined_240s.mat'
+        dl= DatasetLoader()
+        dat = dl.load_broad_dataset(file_name=file)
+        if dat is None:
+            continue
 
-res_g = []
-for i in range(len(dat['gyroscope'])):
-    b.updateGyr(dat['gyroscope'][i])
-    res_g.append(b.getQuat3D())
-    
-#res=b.updateBatch(dat['gyroscope'], dat['accelerometer'], dat['magnetometer'])
+        b = vqf.BasicVQF(1.0/dat['mean_sampling_rate'])
 
-error_9D = angle_error(res_g, dat['reference'])
-print(f'VQF 9D Mean Error: {np.mean(error_9D)} deg')
+        res_g = []
+        for i in range(len(dat['gyroscope'])):
+            b.updateGyr(dat['gyroscope'][i])
+            res_g.append(b.getQuat3D())
+        
+        
+        error_9D = angle_error(res_g, dat['reference'])
 
-# dat_j = dl.load_dataset('Justa')
+        if any(np.diff(error_9D) > 1.0):
+            files_blacklist.append(file)
+        else:
+            files_whitelist.append(file)
+
+print('Files with large errors:')
+print(files_whitelist)
+# #res=b.updateBatch(dat['gyroscope'], dat['accelerometer'], dat['magnetometer'])
+
+# error_9D = angle_error(res_g, dat['reference'])
+# print(f'VQF 9D Mean Error: {np.mean(error_9D)} deg')
+
+# # dat_j = dl.load_dataset('Justa')
 
 
-j_filter = JustaAHRSPure(quaternion=dat['reference'][0], w_acc=0.05, w_mag=0.02)
+# j_filter = JustaAHRSPure(quaternion=dat['reference'][0], w_acc=0.05, w_mag=0.02)
 
 
-time_start=time.time()
-quaternion_result, angle_err = eval_filter_on_dataset(j_filter, dat, use_imu=False)
-time_end=time.time()
+# time_start=time.time()
+# quaternion_result, angle_err = eval_filter_on_dataset(j_filter, dat, use_imu=False)
+# time_end=time.time()
 
 
-print(f'JustaAHRS Pure Mean Error: {np.mean(angle_err)} deg')
+# print(f'JustaAHRS Pure Mean Error: {np.mean(angle_err)} deg')
 
-q_diff = quatern_prod(quatern_conj(dat['reference']), quaternion_result)
+# q_diff = quatern_prod(quatern_conj(dat['reference']), quaternion_result)
 
-plt.figure()
-plt.plot(dat['time'], angle_err, label='error angle')
-plt.plot(dat['time'], error_9D, label='error angle')
-# plt.plot(dat['time'], q_diff, label=['w', 'x', 'y', 'z'])
-#plt.plot(dat['time'], j_filter.bias_history, label=['x', 'y', 'z'])
-plt.legend()
-plt.show()
+# plt.figure()
+# #plt.plot(dat['time'], dat['reference'], label='error angle')
+# plt.plot(dat['time'][:-1], np.diff(error_9D), label='error angle')
+# # plt.plot(dat['time'], q_diff, label=['w', 'x', 'y', 'z'])
+# #plt.plot(dat['time'], j_filter.bias_history, label=['x', 'y', 'z'])
+# plt.legend()
+# plt.show()
 
 
 

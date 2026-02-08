@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import os
 import scipy.io
+from quaternion_library import quatern_prod, quatern_conj
 
 
 class DatasetLoader:
@@ -13,13 +14,19 @@ class DatasetLoader:
     Load and manage AHRS datasets from CSV files
     """
     
-    def __init__(self, base_path='Datasets', base_path_broad ='Datasets/broad/data_mat'):
+    def __init__(self, base_path='Datasets', base_path_broad ='Datasets/broad/data_mat', base_path_sassari ='Datasets/mimu_optical_dataset_caruso_sassari-5.0'):
         self.base_path = base_path
         self.base_path_broad = base_path_broad
+        self.base_path_sassari = base_path_sassari
         self.datasets = {}
         self.ms2g = 9.80665  # Conversion factor from m/s^2 to g
         
     def load_broad_dataset(self, file_name):   
+
+        black_list_error_jump = ['01_undisturbed_slow_rotation_A.mat', '04_undisturbed_slow_rotation_with_breaks_A.mat', '06_undisturbed_fast_rotation_A.mat', '08_undisturbed_fast_rotation_with_breaks_A.mat', '13_undisturbed_slow_translation_with_breaks_A.mat', '15_undisturbed_fast_translation_A.mat', '17_undisturbed_fast_translation_with_breaks_A.mat', '19_undisturbed_slow_combined_240s.mat', '20_undisturbed_slow_combined_360s.mat', '21_undisturbed_fast_combined.mat', '22_undisturbed_fast_combined_240s.mat', '23_undisturbed_fast_combined_360s.mat', '28_disturbed_stationary_magnet_A.mat', '29_disturbed_stationary_magnet_B.mat', '30_disturbed_stationary_magnet_C.mat', '31_disturbed_stationary_magnet_D.mat', '34_disturbed_attached_magnet_3cm.mat', '35_disturbed_attached_magnet_4cm.mat', '36_disturbed_attached_magnet_5cm.mat', '37_disturbed_office_A.mat', '38_disturbed_office_B.mat', '39_disturbed_mixed.mat']
+        if file_name in black_list_error_jump:
+            return None
+
         mat = scipy.io.loadmat(os.path.join(self.base_path_broad, file_name))
         
         quat = mat['opt_quat']
@@ -40,8 +47,47 @@ class DatasetLoader:
         }
         return data
        
+
+    def load_sassari_dataset(self, file_name, unit_n):   
+
+        units = ['AP1', 'AP2', 'SH1', 'SH2', 'XS1', 'XS2']
+
+        mat = scipy.io.loadmat(os.path.join(self.base_path_sassari, file_name))
+        
+        return self.load_sassari_unit(mat, units[unit_n])
     
-       
+    def load_sassari_unit(self, mat, unit_name):
+        
+        ref_key = 'Qs'
+        quat_glob = mat[ref_key]
+
+        unit_raw = mat[unit_name]
+        raw_time = unit_raw[:,0]
+        smoth_time = np.array(pd.Series(raw_time).rolling(200, center=True).mean())
+
+        acc = unit_raw[:,1:4]
+        gyr = unit_raw[:,4:7]
+        mag = unit_raw[:,7:10]
+        # quat_local = unit_raw[:,10:14]
+
+        dt = np.mean(np.diff(raw_time))
+        sr = 1/dt
+        valid_data = ~np.isnan(smoth_time)
+
+        data = {
+            'time': smoth_time[valid_data],
+            'gyroscope': gyr[valid_data,:],
+            'accelerometer': acc[valid_data,:]/self.ms2g,
+            'magnetometer': mag[valid_data,:],
+            'reference': quat_glob[valid_data,:],
+            'mean_sampling_rate': sr
+        }
+        
+        return data
+    
+        # file_path = os.path.join(self.base_path_sassari, file_map[unit_name])
+        # return self.load_sassari_dataset(file_path, unit_name)
+
         
     def load_dataset(self, dataset_name):
         """
