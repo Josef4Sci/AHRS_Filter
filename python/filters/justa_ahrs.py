@@ -14,7 +14,8 @@ import os
 from numba import jit
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from quaternion_library_jit import quatern_prod, quatern_conj, quaternion_rotate_vector, quatern_prod_single, fast_normalize_3d, fast_normalize_4d
+from utils import wahba_constrained
+from quaternion_library_jit import fast_cross, quatern_prod, quatern_conj, quaternion_rotate_vector, quatern_prod_single, fast_normalize_3d, fast_normalize_4d, quatern_conj_single, integrate_euler
 
 class JustaAHRSPure:
     """
@@ -30,7 +31,10 @@ class JustaAHRSPure:
         self.bias_gyro = self.bias_gyro.astype(np.float64)
         self.bias_history = []
         self.bias_history.append(self.bias_gyro.copy())
-            
+
+    def initFromAccMag(self, accelerometer, magnetometer):
+        self.quaternion = wahba_constrained(np.array([0, 0, 1]), accelerometer, np.array([0, 1, 0]), magnetometer)[0]
+
     @jit(nopython=True, cache=True, fastmath=True)
     def update_step_optimized(quaternion, gyroscope, accelerometer, magnetometer, 
                             dt, w_acc, w_mag, bias_gyro):
@@ -188,8 +192,8 @@ class JustaAHRSPure:
         )
         
         # interpolate bias correction
-        self.bias_gyro -= self.corr_bias * (self.gain * dt)
-        self.bias_history.append(self.bias_gyro.copy())
+        # self.bias_gyro -= self.corr_bias * (self.gain * dt)
+        # self.bias_history.append(self.bias_gyro.copy())
 
 def quaternion_derivative(q, gyro):
     """
@@ -221,52 +225,6 @@ def quaternion_derivative(q, gyro):
     ])
     
     return q_dot
-
-
-# Method 1: Simple Euler Integration (fastest, least accurate)
-def integrate_euler(q, gyro, dt):
-    """Simple Euler integration: q_new = q + q_dot * dt"""
-    q_dot = quaternion_derivative(q, gyro)
-    q_new = q + q_dot * dt
-    return q_new
-
-
-# Method 2: Midpoint Method (good balance)
-def integrate_midpoint(q, gyro, dt):
-    """Midpoint integration (2nd order Runge-Kutta)"""
-    # First estimate
-    k1 = quaternion_derivative(q, gyro)
-    
-    # Midpoint
-    q_mid = q + 0.5 * k1 * dt
-    q_mid = q_mid / np.linalg.norm(q_mid)  # Normalize midpoint
-    
-    # Second estimate
-    k2 = quaternion_derivative(q_mid, gyro)
-    
-    q_new = q + k2 * dt
-    return q_new
-
-
-# Method 3: RK4 Integration (most accurate, recommended)
-def integrate_rk4(q, gyro, dt):
-    """4th order Runge-Kutta integration (best accuracy)"""
-    k1 = quaternion_derivative(q, gyro)
-    
-    q2 = q + 0.5 * k1 * dt
-    q2 = q2 / np.linalg.norm(q2)
-    k2 = quaternion_derivative(q2, gyro)
-    
-    q3 = q + 0.5 * k2 * dt
-    q3 = q3 / np.linalg.norm(q3)
-    k3 = quaternion_derivative(q3, gyro)
-    
-    q4 = q + k3 * dt
-    q4 = q4 / np.linalg.norm(q4)
-    k4 = quaternion_derivative(q4, gyro)
-    
-    q_new = q + (k1 + 2*k2 + 2*k3 + k4) * dt / 6
-    return q_new
 
     
 
@@ -336,26 +294,25 @@ class JustaAHRSv2:
         
         # Gyroscope integration
         #q_dot = 0.5 * dt * quatern_prod(q, np.array([0, *(self.scale_factors * (gyroscope - self.bias_gyro))]))
-        qp = integrate_rk4(quaternion, gyro_denoised, dt)
-        qp = qp / np.linalg.norm(qp)
+        qp = integrate_euler(quaternion, gyro_denoised, dt)
         
         
         # Rotation matrix
-        R = np.array([
+        Rt = np.array([
             [2*(0.5 - qp[2]**2 - qp[3]**2), 0, 2*(qp[1]*qp[3] - qp[0]*qp[2])],
             [2*(qp[1]*qp[2] - qp[0]*qp[3]), 0, 2*(qp[0]*qp[1] + qp[2]*qp[3])],
             [2*(qp[0]*qp[2] + qp[1]*qp[3]), 0, 2*(0.5 - qp[1]**2 - qp[2]**2)]
         ])
-        
+
         # Predicted accelerometer
         ar = np.array([0, 0, 1])
-        acc_mes_pred = R @ ar
+        acc_mes_pred = Rt @ ar
         
         # Magnetic reference
         h = quatern_prod(quaternion, quatern_prod(np.array([0, *mag]), quatern_conj(quaternion)))
         mr = np.array([np.linalg.norm([h[1], h[2]]), 0, h[3]])
         mr = mr / np.linalg.norm(mr)
-        mag_mes_pred = R @ mr
+        mag_mes_pred = Rt @ mr
         
         # Accelerometer correction
         ca = np.cross(acc, acc_mes_pred)
@@ -427,7 +384,7 @@ class JustaAHRSv2:
         self.particle_history.append(state)    
         
 
-class JustaAHRSPureFastClean:
+class JustaAHRSInv:
     """
     Justa AHRS Pure Fast implementation
     """
@@ -437,7 +394,12 @@ class JustaAHRSPureFastClean:
         self.gain = gain
         self.w_acc = w_acc
         self.w_mag = w_mag
+        self.test = []
+    
+    def initFromAccMag(self, accelerometer, magnetometer):
+        self.quaternion = wahba_constrained(np.array([0, 0, 1]), accelerometer, np.array([0, 1, 0]), magnetometer)[0]
         
+
     def update(self, gyroscope, accelerometer, magnetometer, dt):
         """
         Update the filter with MARG sensor data
@@ -447,9 +409,7 @@ class JustaAHRSPureFastClean:
             accelerometer: Accelerometer measurement [ax, ay, az]
             magnetometer: Magnetometer measurement [mx, my, mz]
             dt: Sample period in seconds
-        """
-        q = self.quaternion
-        
+        """        
         # Normalise accelerometer measurement
         if np.linalg.norm(accelerometer) == 0:
             return
@@ -459,49 +419,115 @@ class JustaAHRSPureFastClean:
         if np.linalg.norm(magnetometer) == 0:
             return
         mag = magnetometer / np.linalg.norm(magnetometer)
-        
-        # Gyroscope integration
-        q_dot = 0.5 * dt * quatern_prod(q, np.array([0, *gyroscope]))
-        qp = q + q_dot
-        qp = qp / np.linalg.norm(qp)
-        
-        # Rotation matrix
-        R = np.array([
-            [2*(0.5 - qp[2]**2 - qp[3]**2), 0, 2*(qp[1]*qp[3] - qp[0]*qp[2])],
-            [2*(qp[1]*qp[2] - qp[0]*qp[3]), 0, 2*(qp[0]*qp[1] + qp[2]*qp[3])],
-            [2*(qp[0]*qp[2] + qp[1]*qp[3]), 0, 2*(0.5 - qp[1]**2 - qp[2]**2)]
-        ])
+
+        qp = integrate_euler(self.quaternion, gyroscope, dt)
         
         # Predicted accelerometer
         ar = np.array([0, 0, 1])
-        acc_mes_pred = R @ ar
+        inv_pred = quatern_conj_single(qp)
+        acc_mes_pred = quaternion_rotate_vector(inv_pred, acc)
+
+
+        mag_mes_pred = quaternion_rotate_vector(inv_pred, mag)
         
-        # Magnetic reference
-        h = quatern_prod(q, quatern_prod(np.array([0, *mag]), quatern_conj(q)))
-        mr = np.array([np.linalg.norm([h[1], h[2]]), 0, h[3]])
-        mr = mr / np.linalg.norm(mr)
-        mag_mes_pred = R @ mr
+        mr_ref = np.array([0, np.linalg.norm([mag_mes_pred [0], mag_mes_pred [1]]), mag_mes_pred[2]])
         
         # Accelerometer correction
-        ca = np.cross(acc, acc_mes_pred)
+        ca = np.cross(acc_mes_pred, ar)
         na = np.linalg.norm(ca)
         veca = ca / na
         
         phia = self.w_acc
             
         # Magnetometer correction
-        cm = np.cross(mag, mag_mes_pred)
+        cm = np.cross(mag_mes_pred, mr_ref)
         n = np.linalg.norm(cm)
         vecm = cm / n
+
+        vecm[0]=0
+        vecm[1]=0
         
         phim = self.w_mag
-            
+
         # Correction quaternion
-        q_cor = np.array([1, *(veca * phia / 2 + vecm * phim / 2)])
+        q_cor = np.array([1, *(veca * phia + vecm * phim)])
         
-        quat = quatern_prod(qp, q_cor)
+        quat = quatern_prod_single(q_cor, qp)
         
         if quat[0] < 0:
             quat = -quat
             
         self.quaternion = quat / np.linalg.norm(quat)
+        self.test.append(n)
+
+class JustaAHRSInvFast:
+    """
+    Justa AHRS Pure Fast implementation
+    """
+    
+    def __init__(self, quaternion=None, gain=0.0528152, w_acc=0.00248, w_mag=1.35e-04):
+        self.quaternion = np.array([1.0, 0.0, 0.0, 0.0]) if quaternion is None else np.array(quaternion)
+        self.w_acc = w_acc
+        self.w_mag = w_mag
+        self.test = []
+        self.acc_ref = np.array([0, 0, 1])
+    
+    def initFromAccMag(self, accelerometer, magnetometer):
+        """
+        Initialize the filter from accelerometer and magnetometer measurements.
+        
+        Args:
+            accelerometer: Accelerometer measurement [ax, ay, az]
+            magnetometer: Magnetometer measurement [mx, my, mz]
+        """
+        self.quaternion = wahba_constrained(np.array([0, 0, 1]), accelerometer, np.array([0, 1, 0]), magnetometer)[0]      
+
+
+    def update(self, gyroscope, accelerometer, magnetometer, dt):
+        """
+        Update the filter with MARG sensor data
+        
+        Args:
+            gyroscope: Gyroscope measurement [gx, gy, gz] in rad/s
+            accelerometer: Accelerometer measurement [ax, ay, az]
+            magnetometer: Magnetometer measurement [mx, my, mz]
+            dt: Sample period in seconds
+        """        
+        acc, valid_a = fast_normalize_3d(accelerometer)    
+        if not valid_a:
+            return    
+        mag, valid_m = fast_normalize_3d(magnetometer)
+        if not valid_m:
+            return
+
+        qp = integrate_euler(self.quaternion, gyroscope, dt)
+
+        inv_pr = quatern_conj_single(qp)
+        acc_mes_pred = quaternion_rotate_vector(inv_pr, acc)
+        
+        #x part rotation from quat_inv
+        rot_x = np.array([  2*(0.5 - qp[2]**2 - qp[3]**2),
+                            2*(qp[1]*qp[2] - qp[0]*qp[3]),
+                            2*(qp[0]*qp[2] + qp[1]*qp[3]) ])
+        
+        mag_pr_x = np.dot(rot_x, mag)
+
+        # Accelerometer correction
+        ca = fast_cross(acc_mes_pred, self.acc_ref)
+        na = np.linalg.norm(ca)
+        veca = ca / na
+        veca *= self.w_acc
+        
+        #magnetic correction [0 1 0] reference -> mag_mes_pred[0] < 0 -> +w_mag correction, else -w_mag correction
+        veca[2] += -self.w_mag if mag_pr_x < 0 else self.w_mag
+        
+        # Correction quaternion
+        q_cor = np.array([1, *(veca)])
+        
+        quat = quatern_prod_single(q_cor, qp)
+        
+        if quat[0] < 0:
+            quat = -quat
+            
+        self.quaternion = fast_normalize_4d(quat)
+

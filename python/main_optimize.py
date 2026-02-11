@@ -14,7 +14,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from optim_filter_params import FilterOptimizer
 from filters import (
-    MadgwickAHRS, JustaAHRSPure, JustaAHRSv2, JustaAHRSPureFastClean,
+    MadgwickAHRS, JustaAHRSPure, JustaAHRSv2, JustaAHRSInv,
     ValentiAHRS, WilsonMadgwickAHRS, AdmirallWilsonAHRS,
     YoungSooSuhAHRS, JinWuKFAHRS
 )
@@ -101,7 +101,7 @@ def optimize_single_filter(filter_name='MadgwickAHRS', dataset_name='Justa',
     filter_map = {
         'MadgwickAHRS': MadgwickAHRS(beta=0.1),
         'JustaAHRSv2': JustaAHRSv2(gain=12.0, w_acc=0.00248, w_mag=1.35e-04),
-        'JustaAHRSPureFastClean': JustaAHRSPureFastClean(gain=0.0528152, w_acc=0.00248, w_mag=1.35e-04),
+        'JustaAHRSPureFastClean': JustaAHRSInv(gain=0.0528152, w_acc=0.00248, w_mag=1.35e-04),
         'JustaAHRSPure': JustaAHRSPure(w_acc=0.00248, w_mag=1.35e-04),
         'ValentiAHRS': ValentiAHRS(w_acc=0.01, w_mag=0.01),
         'WilsonMadgwickAHRS': WilsonMadgwickAHRS(beta=0.1),
