@@ -20,11 +20,15 @@ class DatasetLoader:
         self.base_path_sassari = base_path_sassari
         self.datasets = {}
         self.ms2g = 9.80665  # Conversion factor from m/s^2 to g
+        self.black_list_error_jump = ['01_undisturbed_slow_rotation_A.mat', '04_undisturbed_slow_rotation_with_breaks_A.mat', '06_undisturbed_fast_rotation_A.mat', '08_undisturbed_fast_rotation_with_breaks_A.mat', '13_undisturbed_slow_translation_with_breaks_A.mat', '15_undisturbed_fast_translation_A.mat', '17_undisturbed_fast_translation_with_breaks_A.mat', '19_undisturbed_slow_combined_240s.mat', '20_undisturbed_slow_combined_360s.mat', '21_undisturbed_fast_combined.mat', '22_undisturbed_fast_combined_240s.mat', '23_undisturbed_fast_combined_360s.mat', '28_disturbed_stationary_magnet_A.mat', '29_disturbed_stationary_magnet_B.mat', '30_disturbed_stationary_magnet_C.mat', '31_disturbed_stationary_magnet_D.mat', '34_disturbed_attached_magnet_3cm.mat', '35_disturbed_attached_magnet_4cm.mat', '36_disturbed_attached_magnet_5cm.mat', '37_disturbed_office_A.mat', '38_disturbed_office_B.mat', '39_disturbed_mixed.mat']
         
+    
+    def broad_white_list_datasets(self):
+        return ['02_undisturbed_slow_rotation_B.mat', '03_undisturbed_slow_rotation_C.mat', '05_undisturbed_slow_rotation_with_breaks_B.mat', '07_undisturbed_fast_rotation_B.mat', '09_undisturbed_fast_rotation_with_breaks_B.mat', '10_undisturbed_slow_translation_A.mat', '11_undisturbed_slow_translation_B.mat', '12_undisturbed_slow_translation_C.mat', '14_undisturbed_slow_translation_with_breaks_B.mat', '16_undisturbed_fast_translation_B.mat', '18_undisturbed_fast_translation_with_breaks_B.mat', '24_disturbed_tapping_A.mat', '25_disturbed_tapping_B.mat', '26_disturbed_phone_vibration_A.mat', '27_disturbed_phone_vibration_B.mat', '32_disturbed_attached_magnet_1cm.mat', '33_disturbed_attached_magnet_2cm.mat']
+    
     def load_broad_dataset(self, file_name):   
 
-        black_list_error_jump = ['01_undisturbed_slow_rotation_A.mat', '04_undisturbed_slow_rotation_with_breaks_A.mat', '06_undisturbed_fast_rotation_A.mat', '08_undisturbed_fast_rotation_with_breaks_A.mat', '13_undisturbed_slow_translation_with_breaks_A.mat', '15_undisturbed_fast_translation_A.mat', '17_undisturbed_fast_translation_with_breaks_A.mat', '19_undisturbed_slow_combined_240s.mat', '20_undisturbed_slow_combined_360s.mat', '21_undisturbed_fast_combined.mat', '22_undisturbed_fast_combined_240s.mat', '23_undisturbed_fast_combined_360s.mat', '28_disturbed_stationary_magnet_A.mat', '29_disturbed_stationary_magnet_B.mat', '30_disturbed_stationary_magnet_C.mat', '31_disturbed_stationary_magnet_D.mat', '34_disturbed_attached_magnet_3cm.mat', '35_disturbed_attached_magnet_4cm.mat', '36_disturbed_attached_magnet_5cm.mat', '37_disturbed_office_A.mat', '38_disturbed_office_B.mat', '39_disturbed_mixed.mat']
-        if file_name in black_list_error_jump:
+        if file_name in self.black_list_error_jump:
             return None
 
         mat = scipy.io.loadmat(os.path.join(self.base_path_broad, file_name))

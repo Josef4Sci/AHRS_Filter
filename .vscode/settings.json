@@ -1,6 +1,5 @@
 {
     "editor.scrollbar.horizontal": "visible",
-    "editor.scrollbar.horizontalScrollbarSize": 30,
     "editor.scrollbar.ignoreHorizontalScrollbarInContentHeight": true,
     "workbench.list.horizontalScrolling": true,
     "workbench.editor.tabSizing": "shrink",

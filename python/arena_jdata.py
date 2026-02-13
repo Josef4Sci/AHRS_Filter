@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import vqf
 import numpy as np
 import pandas as pd
-from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure
+from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure, JustaAHRSv2
 from utils import angle_error, eval_filter_on_dataset
 
 dl = DatasetLoader()
@@ -17,9 +17,9 @@ b = vqf.BasicVQF(1.0/dat['mean_sampling_rate'], tauAcc=0.994, tauMag=1.44)
 #b.state['gyrQuat'] = dat['reference'][0]
 
 
-#j_filter = JustaAHRSInvFast( w_acc=0.00034, w_mag=0.00022)
-j_filter = JustaAHRSPure(w_acc=0.00024, w_mag=0.00022)
-j_filter = JustaAHRSInvFast( w_acc=0.0005, w_mag=0.00044)
+j_filter = JustaAHRSInvFast( w_acc=0.00034, w_mag=0.00022)
+# j_filter = JustaAHRSPure(w_acc=0.00024, w_mag=0.00022)
+j_filter = JustaAHRSv2(w_acc=0.00034, w_mag=0.00022)
 
 # res_g = []
 # for i in range(len(dat['gyroscope'])):

@@ -3,7 +3,7 @@ import numpy as np
 from scipy.optimize import minimize, differential_evolution
 import vqf
 from dataset_loader import DatasetLoader
-from filters import (JustaAHRSv2, JustaAHRSInvFast)
+from filters import (JustaAHRSv2, JustaAHRSInvFast, JustaAHRSPure)
 
 from utils import angle_error, eval_filter_on_dataset
 from matplotlib import pyplot as plt
@@ -22,21 +22,24 @@ def objective_function(params, dataset):
     s1, s2 = params
     
     # Create filter instance with optimized parameters
-    # filter_instance = JustaAHRSInvFast( w_acc=s1, w_mag=s2)
+    filter_instance = JustaAHRSPure( w_acc=s1, w_mag=s2)
 
-    # filter_instance.initFromAccMag(dataset['accelerometer'][0], dataset['magnetometer'][0]) # Initialize with first measurement
+    filter_instance.initFromAccMag(dataset['accelerometer'][0], dataset['magnetometer'][0]) # Initialize with first measurement
     
-    # # Evaluate filter
-    # quaternion_result = eval_filter_on_dataset(
-    #     filter_instance, dataset, use_imu=False, use_square_err=False
-    # )
+    # Evaluate filter
+    quaternion_result = eval_filter_on_dataset(
+        filter_instance, dataset, use_imu=False, use_square_err=False
+    )
 
-    # angle_err = angle_error(quaternion_result, dataset['reference'], use_imu=False, align_start=True, shift_samples=1)
+    angle_err = angle_error(quaternion_result, dataset['reference'], use_imu=False, align_start=True, shift_samples=0)
         
-    b = vqf.BasicVQF(1.0/dataset['mean_sampling_rate'], tauAcc=s1, tauMag=s2)
-    res = b.updateBatch(dataset['gyroscope'], dataset['accelerometer'], dataset['magnetometer'])
-    shift = 1
-    angle_err = angle_error(res['quat9D'], dataset['reference'], align_start=True, shift_samples=shift)
+    # gyr = np.ascontiguousarray(dataset['gyroscope'], dtype=np.float64)
+    # acc = np.ascontiguousarray(dataset['accelerometer'], dtype=np.float64)
+    # mag = np.ascontiguousarray(dataset['magnetometer'], dtype=np.float64)
+    # b = vqf.BasicVQF(1.0/dataset['mean_sampling_rate'], tauAcc=s1, tauMag=s2)
+    # res = b.updateBatch(gyr, acc, mag)
+    # shift = 1
+    # angle_err = angle_error(res['quat9D'], dataset['reference'], align_start=True, shift_samples=shift)
     
     # # Use RMS or absolute error
     # if use_square_err:
@@ -54,7 +57,7 @@ def objective_function(params, dataset):
 def optimize_nelder_mead(dataset):
     """Local optimization using Nelder-Mead method"""
     initial_guess = [0.00248, 1.35e-04]  # Starting from your current values
-    initial_guess = [0.1,5]
+    # initial_guess = [0.9,1]
     
     result = minimize(
         objective_function,
@@ -117,12 +120,12 @@ if __name__ == "__main__":
     print("=" * 60)
     
     dataset_loader = DatasetLoader()
-    #dataset = dataset_loader.load_dataset('Justa')
+    dataset = dataset_loader.load_dataset('Justa')
     #dataset = pickle.load( open('synthetic_rigid_body_sensor_offset.pkl', 'rb') )#  
 
-    dataset = dataset_loader.load_sassari_dataset('medium_v4.mat', 0)
-    bias = dataset['gyroscope'][:500].mean(axis=0)
-    dataset['gyroscope']=dataset['gyroscope']*np.array([1.015, 1.015, 1.01]) - bias
+    # dataset = dataset_loader.load_sassari_dataset('medium_v4.mat', 0)
+    # bias = dataset['gyroscope'][:500].mean(axis=0)
+    # dataset['gyroscope']=dataset['gyroscope']*np.array([1.015, 1.015, 1.01]) - bias
     
     # Option 1: Fast local optimization (recommended to try first)
     print("\n### Method 1: Nelder-Mead (Local Optimization) ###")
@@ -151,26 +154,28 @@ if __name__ == "__main__":
     print("Verifying optimal parameters...")
     print("=" * 60)
     
-    # optimal_filter = JustaAHRSInvFast(
-    #     w_acc=result.x[0], 
-    #     w_mag=result.x[1])
+    optimal_filter = JustaAHRSInvFast(
+        w_acc=result.x[0], 
+        w_mag=result.x[1])
     
-    # optimal_filter.initFromAccMag(dataset['accelerometer'][0], dataset['magnetometer'][0])
+    optimal_filter.initFromAccMag(dataset['accelerometer'][0], dataset['magnetometer'][0])
     
-    # quaternion_result = eval_filter_on_dataset(
-    #     optimal_filter, dataset, use_imu=False, use_square_err=False
-    # )
-    # error_9D = angle_error(quaternion_result, dataset['reference'], align_start=True, shift_samples=1)
-    # final_mean_error = np.mean(error_9D)
+    quaternion_result = eval_filter_on_dataset(
+        optimal_filter, dataset, use_imu=False, use_square_err=False
+    )
+    error_9D = angle_error(quaternion_result, dataset['reference'], align_start=True, shift_samples=1)
+    final_mean_error = np.mean(error_9D)
 
-    b = vqf.BasicVQF(1.0/dataset['mean_sampling_rate'], tauAcc=result.x[0], tauMag=result.x[1])
+    # b = vqf.BasicVQF(1.0/dataset['mean_sampling_rate'], tauAcc=result.x[0], tauMag=result.x[1])
+    # gyr = np.ascontiguousarray(dataset['gyroscope'], dtype=np.float64)
+    # acc = np.ascontiguousarray(dataset['accelerometer'], dtype=np.float64)
+    # mag = np.ascontiguousarray(dataset['magnetometer'], dtype=np.float64)
+    # res = b.updateBatch(gyr, acc, mag)
+    # shift = 1
+    # skip_start_for_comparison = 5000
 
-    res = b.updateBatch(dataset['gyroscope'], dataset['accelerometer'], dataset['magnetometer'])
-    shift = 1
-    skip_start_for_comparison = 5000
-
-    error_9D_vqf = angle_error(res['quat9D'], dataset['reference'], align_start=True, shift_samples=shift)
-    final_mean_error = np.mean(error_9D_vqf)
+    # error_9D_vqf = angle_error(res['quat9D'], dataset['reference'], align_start=True, shift_samples=shift)
+    # final_mean_error = np.mean(error_9D_vqf)
 
     
     print(f"Final mean error: {final_mean_error:.6f}")
