@@ -1,6 +1,35 @@
 import numpy as np
 from quaternion_library import quatern_conj_single, quatern_prod_single, quatern_prod, quatern_conj
 from matplotlib import pyplot as plt
+from scipy.spatial.transform import Rotation, Slerp
+
+
+def interpolate_with_scipy(quaternions, weights):
+    """
+    Use scipy's Slerp for robust interpolation.
+    
+    Args:
+        quaternions: array of shape (N, 4) as [w, x, y, z] (scipy convention)
+        weights: array of shape (N,) with weights (should sum to 1)
+    """
+    # Normalize weights
+    weights = np.array(weights)
+    weights = weights / np.sum(weights)
+    
+    # Create time points for each quaternion
+    times = np.arange(len(quaternions))
+    
+    # Create Slerp interpolator
+    rotations = Rotation.from_quat(quaternions, scalar_first=True)  # expects [w, x, y, z]
+    slerp = Slerp(times, rotations)
+    
+    # Compute weighted interpolation point
+    weighted_time = np.sum(times * weights)
+    
+    # Interpolate
+    result_rotation = slerp(weighted_time)
+    
+    return result_rotation.as_quat(scalar_first=True)  # Return in [w, x, y, z] format
 
 
 def angle_error(q_est, q_ref, use_imu=False, align_start=False, shift_samples=0):
@@ -15,6 +44,8 @@ def angle_error(q_est, q_ref, use_imu=False, align_start=False, shift_samples=0)
     # implement shift by multiplying with conjugate of reference at shift_samples
     if shift_samples > 0:        
         q_err = quatern_prod(q_ref[shift_samples:,:], quatern_conj(q_est_in[0:-(shift_samples),:]))
+    elif shift_samples < 0:
+        q_err = quatern_prod(q_ref[0:shift_samples,:], quatern_conj(q_est_in[-shift_samples:,:]))
     else:
         q_err = quatern_prod(q_ref, quatern_conj(q_est_in))
     

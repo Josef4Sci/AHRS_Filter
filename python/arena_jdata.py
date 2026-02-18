@@ -1,11 +1,13 @@
 import time
 from dataset_loader import DatasetLoader
 import matplotlib.pyplot as plt
-import vqf
+from vqf.vqf.basicvqf import BasicVQF
 import numpy as np
 import pandas as pd
-from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure, JustaAHRSv2
+from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure, JustaAHRSv2, JustaAHRSv3, JustaAHRSv4
 from utils import angle_error, eval_filter_on_dataset
+
+plot_result = True
 
 dl = DatasetLoader()
 # dataset_name = 'slow_v4.mat'
@@ -13,13 +15,15 @@ dl = DatasetLoader()
 
 dat = dl.load_dataset('Justa')
 
-b = vqf.BasicVQF(1.0/dat['mean_sampling_rate'], tauAcc=0.994, tauMag=1.44)
+b =BasicVQF(1.0/dat['mean_sampling_rate'], tauAcc=0.994, tauMag=1.44, motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False)
 #b.state['gyrQuat'] = dat['reference'][0]
 
 
 j_filter = JustaAHRSInvFast( w_acc=0.00034, w_mag=0.00022)
 # j_filter = JustaAHRSPure(w_acc=0.00024, w_mag=0.00022)
-j_filter = JustaAHRSv2(w_acc=0.00034, w_mag=0.00022)
+j_filter = JustaAHRSv3(w_acc=0.00044, w_mag=0.00032, delay_steps=3)
+j_filter = JustaAHRSPure(w_acc=0.001, w_mag=0.0005, gyro_scale=np.array([0.95, 1.0, 0.99]))
+j_filter = JustaAHRSv4(w_acc=0.4, w_mag=0.00032, cut_off=10.0, fs=dat['mean_sampling_rate'])
 
 # res_g = []
 # for i in range(len(dat['gyroscope'])):
@@ -43,12 +47,17 @@ quaternion_result = eval_filter_on_dataset(j_filter, dat)
 end_time = time.time()
 print(f"Justa filter evaluation took {end_time - start_time:.4f} seconds")
 
-shift = 1
-window = 100
+shift = -1
+window = 500
 
 skip_start_for_comparison = 10
 
 error_9D = angle_error(quaternion_result, dat['reference'], align_start=True, shift_samples=shift)
+
+# plt.plot(j_filter.coefs, label='Justa AHRS v3')
+# plt.legend()
+# plt.show()
+
 error_9D_vqf = angle_error(res['quat9D'], dat['reference'], align_start=True, shift_samples=shift)
 
 diff_error_vqf = (pd.Series(error_9D_vqf) - pd.Series(error_9D_vqf).rolling(window).mean()).to_numpy()
@@ -58,8 +67,11 @@ print(f'Mean diff error vqf: {np.mean(np.abs(diff_error_vqf[window+skip_start_fo
 diff_error = (pd.Series(error_9D) - pd.Series(error_9D).rolling(window).mean()).to_numpy()
 print(f'Mean error: {np.mean(error_9D[skip_start_for_comparison:]):.2f} deg')
 print(f'Mean diff error: {np.mean(np.abs(diff_error[window+skip_start_for_comparison:])):.4f} deg')
-plt.plot(dat['time'][shift:], diff_error, label='Diff Error')
-plt.plot(dat['time'][shift:], error_9D, label='J error')
-plt.plot(dat['time'][shift:], error_9D_vqf, label='VQF error')
-plt.legend()
-plt.show()
+
+window = 20
+if plot_result:
+    plt.plot(pd.Series(np.abs(diff_error)).rolling(window).mean(), label='Diff Error')
+    plt.plot(pd.Series(error_9D).rolling(window).mean() , label='J error')
+    plt.plot(pd.Series(error_9D_vqf).rolling(window).mean() , label='VQF error')
+    plt.legend()
+    plt.show()

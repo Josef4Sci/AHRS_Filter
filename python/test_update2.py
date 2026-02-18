@@ -1,78 +1,43 @@
-
-import vqf
-from dataset_loader import DatasetLoader
-import scipy.io
-from quaternion_library import quatern_prod, quatern_conj
 import numpy as np
-import matplotlib.pyplot as plt
-import pandas as pd
-from utils import angle_error, eval_filter_on_dataset
-from filters import (JustaAHRSv2, JustaAHRSPure)
-import time
-import os
+from scipy import signal
+from matplotlib import pyplot as plt
+from dataset_loader import DatasetLoader
 
-mat = scipy.io.loadmat('Datasets/Synthetic2.mat')
+load_dataset = DatasetLoader()
+dat = load_dataset.load_dataset('Justa')
+x = dat['gyroscope'][:, 0]  # Use the x-axis gyroscope data as an example
+fs = dat['mean_sampling_rate']  # Sampling frequency from the dataset
+t = np.arange(len(x)) / fs  # Time vector based on the length of the data and sampling frequency
+# Generate signal with high-frequency noise
+# fs = 1000  # Sampling frequency (Hz)
+# t = np.linspace(0, 1, fs)
+# x = np.sin(2 * np.pi * 10 * t) + 0.5 * np.sin(2 * np.pi * 100 * t)
 
-folder = 'Datasets\\broad\\data_mat'
+# Design Butterworth filter
+order = 2
+cutoff = 5  # Cutoff frequency (Hz)
+nyquist = fs / 2
+normalized_cutoff = cutoff / nyquist
 
-files = os.listdir(folder)
-files_blacklist = []
-files_whitelist = []
-for file in files:
-    if file.endswith('.mat'):
-        # n ='01_undisturbed_slow_rotation_A.mat'
-        # n= '02_undisturbed_slow_rotation_B.mat'
-        # n= '07_undisturbed_fast_rotation_B.mat'
-        # n ='22_undisturbed_fast_combined_240s.mat'
-        dl= DatasetLoader()
-        dat = dl.load_broad_dataset(file_name=file)
-        if dat is None:
-            continue
-
-        b = vqf.BasicVQF(1.0/dat['mean_sampling_rate'])
-
-        res_g = []
-        for i in range(len(dat['gyroscope'])):
-            b.updateGyr(dat['gyroscope'][i])
-            res_g.append(b.getQuat3D())
-        
-        
-        error_9D = angle_error(res_g, dat['reference'])
-
-        if any(np.diff(error_9D) > 1.0):
-            files_blacklist.append(file)
-        else:
-            files_whitelist.append(file)
-
-print('Files with large errors:')
-print(files_whitelist)
-# #res=b.updateBatch(dat['gyroscope'], dat['accelerometer'], dat['magnetometer'])
-
-# error_9D = angle_error(res_g, dat['reference'])
-# print(f'VQF 9D Mean Error: {np.mean(error_9D)} deg')
-
-# # dat_j = dl.load_dataset('Justa')
+# Get filter coefficients
+b, a = signal.butter(order, normalized_cutoff, btype='low')
 
 
-# j_filter = JustaAHRSPure(quaternion=dat['reference'][0], w_acc=0.05, w_mag=0.02)
+# Apply filter
+zi = signal.lfilter_zi(b, a) * x[0]  # Scale by first input value
 
+# Allocate output array
+y = np.zeros(len(x))
 
-# time_start=time.time()
-# quaternion_result, angle_err = eval_filter_on_dataset(j_filter, dat, use_imu=False)
-# time_end=time.time()
+# Filter sample by sample
+for i in range(len(x)):
+    # Pass single sample and get updated state
+    y[i], zi = signal.lfilter(b, a, [x[i]], zi=zi)
 
-
-# print(f'JustaAHRS Pure Mean Error: {np.mean(angle_err)} deg')
-
-# q_diff = quatern_prod(quatern_conj(dat['reference']), quaternion_result)
-
-# plt.figure()
-# #plt.plot(dat['time'], dat['reference'], label='error angle')
-# plt.plot(dat['time'][:-1], np.diff(error_9D), label='error angle')
-# # plt.plot(dat['time'], q_diff, label=['w', 'x', 'y', 'z'])
-# #plt.plot(dat['time'], j_filter.bias_history, label=['x', 'y', 'z'])
-# plt.legend()
-# plt.show()
-
-
-
+# Plot results
+plt.figure(figsize=(10, 4))
+plt.plot(t, x, 'b-', alpha=0.3, label='Noisy signal')
+plt.plot(t, y, 'r-', linewidth=2, label='Filtered signal')
+plt.legend()
+plt.grid(True)
+plt.show()

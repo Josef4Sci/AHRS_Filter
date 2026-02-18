@@ -1,3 +1,9 @@
 [submodule "Datasets/broad"]
 	path = Datasets/broad
 	url = https://github.com/dlaidig/broad.git
+[submodule "python/vqf-c"]
+	path = python/vqf-c
+	url = https://github.com/DusKing1/vqf-c.git
+[submodule "python/vqf"]
+	path = python/vqf
+	url = https://github.com/dlaidig/vqf.git

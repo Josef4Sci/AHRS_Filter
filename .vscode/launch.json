@@ -9,7 +9,7 @@
             "name": "Python Debugger: Current File",
             "type": "debugpy",
             "request": "launch",
-            "program": "python/experiment_devel.py",
+            "program": "${file}",
             "console": "integratedTerminal"
         }
     ]
