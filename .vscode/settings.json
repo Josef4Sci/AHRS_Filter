@@ -3,5 +3,6 @@
     "editor.scrollbar.ignoreHorizontalScrollbarInContentHeight": true,
     "workbench.list.horizontalScrolling": true,
     "workbench.editor.tabSizing": "shrink",
-    "workbench.editor.wrapTabs": true
+    "workbench.editor.wrapTabs": true,
+    "cmake.ignoreCMakeListsMissing": true
 }

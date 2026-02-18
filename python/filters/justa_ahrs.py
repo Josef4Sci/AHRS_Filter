@@ -594,7 +594,7 @@ class JustaAHRSv4:
     Justa AHRS Pure Fast implementation
     """
     
-    def __init__(self, quaternion=None, cut_off=0.0528152, w_acc=0.00248, w_mag=1.35e-04, fs=100):
+    def __init__(self, quaternion=None, cut_off=0.0528152, w_acc=0.00248, w_mag=1.35e-04, fs=100, test_multip=None):
         self.quaternion = np.array([1.0, 0.0, 0.0, 0.0]) if quaternion is None else np.array(quaternion)
         self.w_acc = w_acc
         self.w_mag = w_mag
@@ -607,8 +607,12 @@ class JustaAHRSv4:
         normalized_cutoff = cutoff / nyquist
 
         # Get filter coefficients
-        self.b, self.a = signal.butter(order, normalized_cutoff, btype='low')
-        self.zi = None
+        #self.b, self.a = signal.butter(order, normalized_cutoff, btype='low')
+        
+        self.zi = cut_off
+        self.acc_modif = cut_off
+        self.i = 0
+        self.test_multip = test_multip
         
     
     def initFromAccMag(self, accelerometer, magnetometer):
@@ -621,18 +625,18 @@ class JustaAHRSv4:
         """
         self.quaternion = wahba_constrained(np.array([0, 0, 1]), accelerometer, np.array([0, 1, 0]), magnetometer)[0]      
 
-    def low_pass_acc(self, acc):
-        if self.zi is None:
-            self.zi = np.zeros((3, len(self.b)-1))
-            self.zi[0, :] = signal.lfilter_zi(self.b, self.a) * acc[0]  # Scale by first input value
-            self.zi[1, :] = signal.lfilter_zi(self.b, self.a) * acc[1]  # Scale by first input value
-            self.zi[2, :] = signal.lfilter_zi(self.b, self.a) * acc[2]  # Scale by first input value
+    # def low_pass_acc(self, acc):
+    #     if self.zi is None:
+    #         self.zi = np.zeros((3, len(self.b)-1))
+    #         self.zi[0, :] = signal.lfilter_zi(self.b, self.a) * acc[0]  # Scale by first input value
+    #         self.zi[1, :] = signal.lfilter_zi(self.b, self.a) * acc[1]  # Scale by first input value
+    #         self.zi[2, :] = signal.lfilter_zi(self.b, self.a) * acc[2]  # Scale by first input value
 
-        ax, self.zi[0,:] = signal.lfilter(self.b, self.a, [acc[0]], zi=self.zi[0,:])
-        ay, self.zi[1,:] = signal.lfilter(self.b, self.a, [acc[1]], zi=self.zi[1,:])
-        az, self.zi[2,:] = signal.lfilter(self.b, self.a, [acc[2]], zi=self.zi[2,:])
+    #     ax, self.zi[0,:] = signal.lfilter(self.b, self.a, [acc[0]], zi=self.zi[0,:])
+    #     ay, self.zi[1,:] = signal.lfilter(self.b, self.a, [acc[1]], zi=self.zi[1,:])
+    #     az, self.zi[2,:] = signal.lfilter(self.b, self.a, [acc[2]], zi=self.zi[2,:])
 
-        return np.array([ax, ay, az]).squeeze()
+    #     return np.array([ax, ay, az]).squeeze()
 
 
     def update(self, gyroscope, accelerometer, magnetometer, dt):
@@ -652,14 +656,30 @@ class JustaAHRSv4:
         if not valid_m:
             return
 
+        
 
+        # gn = np.linalg.norm(gyroscope)
+        # thresh_integ = 1.0
+        # scale = 0.002
+        
+        # self.acc_modif = self.acc_modif + scale * (gn - thresh_integ)
+        # self.acc_modif = max(0.0, min(self.acc_modif, 1.0))  # Cap the value at 1.0
+
+        # a_gyr = 5.0
+        # b_gyr = 2.0
+        # base = 1.0 / (1 + np.exp(b_gyr))
+        # a = 1 - base - 1 / (1 + np.exp(gn*a_gyr-b_gyr))
+        # xa = self.acc_modif  - a
+        modif = self.test_multip[self.i] if self.test_multip is not None else 1.0 #np.maximum(xa, 0.0) + self.zi 
+        
+        self.i += 1
+        
         qp = integrate_midpoint(self.quaternion, gyroscope, dt)
 
         inv_pr = quatern_conj_single(qp)
         acc_mes_pred = quaternion_rotate_vector(inv_pr, acc)
 
          
-        acc_mes_pred = self.low_pass_acc(acc_mes_pred)
         #x part rotation from quat_inv
         rot_x = np.array([  2*(0.5 - qp[2]**2 - qp[3]**2),
                             2*(qp[1]*qp[2] - qp[0]*qp[3]),
@@ -668,13 +688,14 @@ class JustaAHRSv4:
         mag_pr_x = np.dot(rot_x, mag)
 
         # Accelerometer correction
-        veca = fast_cross(acc_mes_pred, self.acc_ref)       
-        na = np.linalg.norm(veca)
-        #veca = ca / na
-        veca *= self.w_acc * na
+        ca = fast_cross(acc_mes_pred, self.acc_ref)       
+        na = np.linalg.norm(ca)
+        veca = ca / na
+        veca *= (self.w_acc * modif)
         
         #magnetic correction [0 1 0] reference -> mag_mes_pred[0] < 0
-        veca[2] += -self.w_mag if mag_pr_x < 0 else self.w_mag
+        mag_cor = modif * self.w_mag
+        veca[2] += -mag_cor if mag_pr_x < 0 else mag_cor
         
         # Correction quaternion
         q_cor = np.array([1, *(veca)])

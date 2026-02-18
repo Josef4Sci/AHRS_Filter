@@ -1,7 +1,7 @@
 import time
 from dataset_loader import DatasetLoader
 import matplotlib.pyplot as plt
-from vqf.vqf.basicvqf import BasicVQF
+from vqf.pyvqf import PyVQF
 import numpy as np
 import pandas as pd
 from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure, JustaAHRSv2, JustaAHRSv3, JustaAHRSv4
@@ -15,15 +15,10 @@ dl = DatasetLoader()
 
 dat = dl.load_dataset('Justa')
 
-b =BasicVQF(1.0/dat['mean_sampling_rate'], tauAcc=0.994, tauMag=1.44, motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False)
+b = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=0.994, tauMag=1.44, motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False)
 #b.state['gyrQuat'] = dat['reference'][0]
 
-
-j_filter = JustaAHRSInvFast( w_acc=0.00034, w_mag=0.00022)
-# j_filter = JustaAHRSPure(w_acc=0.00024, w_mag=0.00022)
-j_filter = JustaAHRSv3(w_acc=0.00044, w_mag=0.00032, delay_steps=3)
-j_filter = JustaAHRSPure(w_acc=0.001, w_mag=0.0005, gyro_scale=np.array([0.95, 1.0, 0.99]))
-j_filter = JustaAHRSv4(w_acc=0.4, w_mag=0.00032, cut_off=10.0, fs=dat['mean_sampling_rate'])
+j_filter = JustaAHRSv4(w_acc=0.001379, w_mag= 0.000072)
 
 # res_g = []
 # for i in range(len(dat['gyroscope'])):

@@ -1,13 +1,15 @@
 import pickle
 import numpy as np
 from scipy.optimize import minimize, differential_evolution
-from vqf.vqf.basicvqf import BasicVQF
+from vqf.basicvqf import BasicVQF
 from dataset_loader import DatasetLoader
 from filters import (JustaAHRSv2, JustaAHRSInvFast, JustaAHRSPure, JustaAHRSv3, JustaAHRSv4)
 
+from turbo_data import TuRBO_BO
 from utils import angle_error, eval_filter_on_dataset
 from matplotlib import pyplot as plt
 import pandas as pd
+
 
 # Define the objective function to minimize
 def objective_function(params, dataset):
@@ -20,22 +22,22 @@ def objective_function(params, dataset):
         [s1, s2] parameters to optimize
     """
     # s1, s2, s3 = params
-    s1, s2, s3 = params
+    N = params.shape[0]
     
     # Create filter instance with optimized parameters
     #filter_instance = JustaAHRSPure( w_acc=s1, w_mag=s2)
-    filter_instance = JustaAHRSv4(w_acc=s1, w_mag=s2, cut_off=s3)
-    # filter_instance = JustaAHRSPure( w_acc=0, w_mag=0, gyro_scale=np.array([s1, s2, s3]) )
-    # #filter_instance = JustaAHRSv2(w_acc=0.00143, w_mag=0.0001, delay_steps=10, a_gyr=s1, b_gyr=s2)
+    # filter_instance = JustaAHRSv4(w_acc=params[0], w_mag=params[1])
+    # # filter_instance = JustaAHRSPure( w_acc=0, w_mag=0, gyro_scale=np.array([s1, s2, s3]) )
+    # # #filter_instance = JustaAHRSv2(w_acc=0.00143, w_mag=0.0001, delay_steps=10, a_gyr=s1, b_gyr=s2)
 
-    filter_instance.initFromAccMag(dataset['accelerometer'][0], dataset['magnetometer'][0]) # Initialize with first measurement
+    # filter_instance.initFromAccMag(dataset['accelerometer'][0], dataset['magnetometer'][0]) # Initialize with first measurement
     
-    # # Evaluate filter
-    quaternion_result = eval_filter_on_dataset(
-        filter_instance, dataset, use_imu=False, use_square_err=False
-    )
+    # # # Evaluate filter
+    # quaternion_result = eval_filter_on_dataset(
+    #     filter_instance, dataset, use_imu=False, use_square_err=False
+    # )
 
-    angle_err = angle_error(quaternion_result, dataset['reference'], use_imu=False, align_start=True, shift_samples=0)
+    # angle_err = angle_error(quaternion_result, dataset['reference'], use_imu=False, align_start=True, shift_samples=0)
 
     # window = 500
     # shift = -1
@@ -48,14 +50,14 @@ def objective_function(params, dataset):
     # # print(f'Mean diff error: {men_diff:.4f} deg')
     # mean_error = men_diff
         
-    # gyr = np.ascontiguousarray(dataset['gyroscope'], dtype=np.float64)
-    # acc = np.ascontiguousarray(dataset['accelerometer'], dtype=np.float64)
-    # mag = np.ascontiguousarray(dataset['magnetometer'], dtype=np.float64)
-    # b = BasicVQF(1.0/dataset['mean_sampling_rate'], tauAcc=s1, tauMag=s2, motionBiasEstEnabled=True, restBiasEstEnabled=True, magDistRejectionEnabled=False)
-    # #b= vqf.VQF(1.0/dataset['mean_sampling_rate'], tauAcc=s1, tauMag=s2)
-    # res = b.updateBatch(gyr, acc, mag)
-    # shift = 1
-    # angle_err = angle_error(res['quat9D'], dataset['reference'], align_start=True, shift_samples=shift)
+    gyr = np.ascontiguousarray(dataset['gyroscope'] * np.array([params[0], params[1], params[2]]), dtype=np.float64)
+    acc = np.ascontiguousarray(dataset['accelerometer'], dtype=np.float64)
+    mag = np.ascontiguousarray(dataset['magnetometer'], dtype=np.float64)
+    b = BasicVQF(1.0/dataset['mean_sampling_rate'], tauAcc=1, tauMag=42)
+    #b= vqf.VQF(1.0/dataset['mean_sampling_rate'], tauAcc=s1, tauMag=s2)
+    res = b.updateBatch(gyr, acc, mag)
+    shift = -1
+    angle_err = angle_error(res['quat9D'], dataset['reference'], align_start=True, shift_samples=shift)
     
     # Use RMS or absolute error
     # if use_square_err:
@@ -64,8 +66,9 @@ def objective_function(params, dataset):
     mean_error = np.mean(angle_err)
     #mean_error = np.mean(pd.Series( np.diff(angle_err)).rolling(20).mean().abs())
     
-    print(f"s1={s1:.6f}, s2={s2:.6f}, s3={s3:.6f} -> mean_error={mean_error:.6f}")
-    #print(f"s1={s1:.6f}, s2={s2:.6f} -> mean_error={mean_error:.6f}")
+    for i in range(N):
+        print(f"s{i+1}={params[i]:.6f}", end=' ')
+    print(f"-> mean_error={mean_error:.6f}")
     
     return mean_error
     
@@ -73,9 +76,9 @@ def objective_function(params, dataset):
 # Method 1: Nelder-Mead (simplex) - Good for local optimization
 def optimize_nelder_mead(dataset):
     """Local optimization using Nelder-Mead method"""
-    initial_guess = [0.248, 1.35e-04, 2.0]  # Starting from your current values
-    # initial_guess = [0.9,1]
-    #initial_guess = [1, 0.0001]
+    initial_guess = [0.0004, 1.35e-04, 0.5]  # Starting from your current values
+    initial_guess = [0.9,1]
+    initial_guess = [1, 1, 1]
     
     result = minimize(
         objective_function,
@@ -83,19 +86,40 @@ def optimize_nelder_mead(dataset):
         args=(dataset,),        
         method='Nelder-Mead',
         options={'maxiter': 200, 'xatol': 1e-6, 'fatol': 1e-6, 'disp': True}
+        #bounds=[(0, 1.0), (0, 1.0), (0.0, 1.0)]
     )
     
     return result
 
+def turbo_bo_optimize(dataset):
+    
+    pbounds = {"x1": (0, 0.01), "x2": (0, 0.01)} #, "x3": (0, 1)
+
+    turbo_bo = TuRBO_BO(
+        f=objective_function,
+        pbounds=pbounds,
+        dataset=dataset
+    )
+
+    best_pt, best_val = turbo_bo.run(n_iter=5)
+    # scipy like result object
+    class Result:
+        def __init__(self, x, fun):
+            self.x = x
+            self.fun = fun
+            self.success = True
+            self.message = "Optimization completed successfully."
+            
+    return Result(best_pt, best_val.squeeze())
 
 # Method 2: L-BFGS-B - Bounded optimization with gradients
 def optimize_lbfgsb(dataset, bounds=None):
     """Bounded optimization using L-BFGS-B"""
-    initial_guess = [1.05, 1.0, 1.0]
+    initial_guess = [0.0004, 1.35e-04, 0.5] 
     
     if bounds is None:
         # Define reasonable bounds for s1, s2, s3
-        bounds = [(0.1, 5.0), (0.1, 5.0), (0.1, 5.0)]
+        bounds = [(0.0, 5.0), (0.0, 5.0), (0.0, 1.0)]
     
     result = minimize(
         objective_function,
@@ -141,21 +165,25 @@ if __name__ == "__main__":
     dataset = dataset_loader.load_dataset('Justa')
     #dataset = pickle.load( open('synthetic_rigid_body_sensor_offset.pkl', 'rb') )#  
 
-    dataset = dataset_loader.load_sassari_dataset('medium_v4.mat', 0)
+    # dataset = dataset_loader.load_sassari_dataset('medium_v4.mat', 0)
     # bias = dataset['gyroscope'][:500].mean(axis=0)
     # dataset['gyroscope']=dataset['gyroscope']*np.array([1.015, 1.015, 1.01]) - bias
     
-    # Option 1: Fast local optimization (recommended to try first)
+    # # Option 1: Fast local optimization (recommended to try first)
     print("\n### Method 1: Nelder-Mead (Local Optimization) ###")
     result = optimize_nelder_mead(dataset)
     
-    # Option 2: Bounded local optimization
+    # # Option 2: Bounded local optimization
     # print("\n### Method 2: L-BFGS-B (Bounded Optimization) ###")
-    # result = optimize_lbfgsb()
+    # result = optimize_lbfgsb(dataset)
     
     #Option 3: Global optimization (more thorough but slower)
     # print("\n### Method 3: Differential Evolution (Global Optimization) ###")
     # result = optimize_differential_evolution()
+    
+    # Option 4: TuRBO Bayesian Optimization
+    # print("\n### Method 4: TuRBO Bayesian Optimization ###")
+    # result = turbo_bo_optimize(dataset)
     
     print("\n" + "=" * 60)
     print("Optimization Complete!")
