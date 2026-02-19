@@ -5,8 +5,9 @@ import pandas as pd
 import numpy as np
 import re
 from collections import defaultdict
+import os
 
-BASE_FOLDER = 'C:\\Users\\josef\\Desktop\\AHRS_Filter\\Datasets\\raw_j\\'
+BASE_FOLDER = './Datasets/raw_j/'
 
 def load_raw_justa(vic_path, imu_path):
     dat_vic = pd.read_csv(BASE_FOLDER + vic_path)
@@ -57,46 +58,45 @@ def fix_negative_qw(quaternions):
             quaternions[i] = -quaternions[i]
     return quaternions
 
-import os
-print(os.listdir(BASE_FOLDER))
-# Regex pattern: capture everything before the date pattern
-pattern = r'^(.+?)-\d{4}-\d{2}-\d{2}'
+def get_measurement_files(base_folder):
+    # Regex pattern: capture everything before the date pattern
+    pattern = r'^(.+?)-\d{4}-\d{2}-\d{2}'
 
-# Group files by measurement name
-measurements = defaultdict(list)
+    # Group files by measurement name
+    measurements = defaultdict(list)
 
-for filename in os.listdir(BASE_FOLDER):
-    match = re.match(pattern, filename)
-    if match:
-        measurement_name = match.group(1)
-        measurements[measurement_name].append(filename)
+    for filename in os.listdir(base_folder):
+        match = re.match(pattern, filename)
+        if match:
+            measurement_name = match.group(1)
+            measurements[measurement_name].append(filename)
 
-# Display paired measurements
-# for name, files in measurements.items():
-#     print(f"{name}:")
-#     for file in files:
-#         print(f"  - {file}")
-#     print()
+    return measurements
 
+def fix_magnet_alignment(dat_imu):
+    #sensor in bmx055 has switched axis for magnetometer, fix by m_x_fix = -m_y and m_y_fix = m_x
+    mx_copy = dat_imu['mag_x'].copy()
+    my_copy = dat_imu['mag_y'].copy()
+    dat_imu['mag_x'], dat_imu['mag_y'] = -my_copy, mx_copy
+    return dat_imu
 
-name, files = list(measurements.items())[0]
+if __name__ == '__main__':
+    measurements = get_measurement_files(BASE_FOLDER)
+    name, files = list(measurements.items())[0]
 
-pd_rot, dat_imu = load_raw_justa(files[1], files[0])
+    pd_rot, dat_imu = load_raw_justa(files[1], files[0])
+    interp_quats = interpolate_vicon_to_imu(pd_rot, dat_imu)
+    fixed_q = fix_negative_qw(interp_quats)
+    dat_imu = add_time_from_start(dat_imu)
 
-interp_quats = interpolate_vicon_to_imu(pd_rot, dat_imu)
+    plt.plot(dat_imu['time_from_start'], dat_imu['gyr_x'], label='gyr_x')
+    plt.plot(dat_imu['time_from_start'], dat_imu['gyr_y'], label='gyr_y')
+    plt.plot(dat_imu['time_from_start'], dat_imu['gyr_z'], label='gyr_z')
+    plt.plot(dat_imu['time_from_start'], fixed_q, label=['qw', 'qx', 'qy', 'qz'])
 
-fixed_q = fix_negative_qw(interp_quats)
-
-dat_imu = add_time_from_start(dat_imu)
-
-plt.plot(dat_imu['time_from_start'], dat_imu['gyr_x'], label='gyr_x')
-plt.plot(dat_imu['time_from_start'], dat_imu['gyr_y'], label='gyr_y')
-plt.plot(dat_imu['time_from_start'], dat_imu['gyr_z'], label='gyr_z')
-plt.plot(dat_imu['time_from_start'], fixed_q, label=['qw', 'qx', 'qy', 'qz'])
-
-# plt.plot(pd_rot[:,0], pd_rot[:,1], label='x')
-# plt.plot(pd_rot[:,0], pd_rot[:,2], label='y')
-# plt.plot(pd_rot[:,0], pd_rot[:,3], label='z')
-# plt.plot(pd_rot[:,0], pd_rot[:,4], label='w')
-plt.legend()
-plt.show()
+    # plt.plot(pd_rot[:,0], pd_rot[:,1], label='x')
+    # plt.plot(pd_rot[:,0], pd_rot[:,2], label='y')
+    # plt.plot(pd_rot[:,0], pd_rot[:,3], label='z')
+    # plt.plot(pd_rot[:,0], pd_rot[:,4], label='w')
+    plt.legend()
+    plt.show()

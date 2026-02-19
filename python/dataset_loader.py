@@ -7,7 +7,7 @@ import numpy as np
 import os
 import scipy.io
 from quaternion_library import quatern_prod, quatern_conj
-
+from preprocess_data.load_raw_justa import fix_magnet_alignment, get_measurement_files, load_raw_justa, interpolate_vicon_to_imu, add_time_from_start, fix_negative_qw
 
 class DatasetLoader:
     """
@@ -133,7 +133,30 @@ class DatasetLoader:
         
         self.datasets[dataset_name] = data
         return data
-        
+
+    def load_justa_raw(self, num):
+        fold =  './Datasets/raw_j/'
+        files_m = get_measurement_files(fold)
+        name, files = list(files_m.items())[ num]
+        pd_rot, dat_imu = load_raw_justa(files[1], files[0])
+        interp_quats = interpolate_vicon_to_imu(pd_rot, dat_imu)
+        dat_imu = add_time_from_start(dat_imu)
+        interp_quats = fix_negative_qw(interp_quats)
+        #dat_imu = fix_magnet_alignment(dat_imu)
+
+        sampling_rate = 1.0 / np.diff(dat_imu['time_from_start']).mean()
+
+        data = {
+            'time': dat_imu['time_from_start'].values,
+            'gyroscope': dat_imu[['gyr_x', 'gyr_y', 'gyr_z']].values,
+            'accelerometer': dat_imu[['acc_x', 'acc_y', 'acc_z']].values,
+            'magnetometer': dat_imu[['mag_x', 'mag_y', 'mag_z']].values,
+            'reference': interp_quats,
+            'mean_sampling_rate': sampling_rate,
+            'dataset': name
+        }
+        return data
+
     def load_all_datasets(self):
         """
         Load all available datasets
