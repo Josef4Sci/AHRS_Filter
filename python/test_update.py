@@ -1,11 +1,12 @@
 import time
 from dataset_loader import DatasetLoader
 import matplotlib.pyplot as plt
-from vqf.vqf.pyvqf import PyVQF
+from vqf.pyvqf import PyVQF
 import numpy as np
 import pandas as pd
 from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure, JustaAHRSv2, JustaAHRSv3, JustaAHRSv4
 from utils import angle_error, eval_filter_on_dataset, plot_dataset
+import pickle
 
 plot_result = True
 
@@ -13,7 +14,7 @@ dl = DatasetLoader()
 # dataset_name = 'slow_v4.mat'
 # dat = dl.load_sassari_dataset(dataset_name, 2)
 
-dat = dl.load_justa_raw(0)
+dat = dl.load_justa_raw(1)
 plot_dataset(dat)
 
 b = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=0.994, tauMag=1.44, motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False)
@@ -48,6 +49,16 @@ window = 500
 
 skip_start_for_comparison = 10
 
+#save both quaternions to file for comparison
+pikle_data = {
+    'time': dat['time'],
+    'quaternion_justa': quaternion_result,
+    'quaternion_vqf': res['quat9D'],
+    'reference': dat['reference']
+}
+with open('quaternion_comparison.pkl', 'wb') as f:
+    pickle.dump(pikle_data, f)
+
 error_9D = angle_error(quaternion_result, dat['reference'], align_start=True, shift_samples=shift)
 
 # plt.plot(j_filter.coefs, label='Justa AHRS v3')
@@ -64,7 +75,7 @@ diff_error = (pd.Series(error_9D) - pd.Series(error_9D).rolling(window).mean()).
 print(f'Mean error: {np.mean(error_9D[skip_start_for_comparison:]):.2f} deg')
 print(f'Mean diff error: {np.mean(np.abs(diff_error[window+skip_start_for_comparison:])):.4f} deg')
 
-window = 20
+window = 1
 if plot_result:
     plt.plot(pd.Series(np.abs(diff_error)).rolling(window).mean(), label='Diff Error')
     plt.plot(pd.Series(error_9D).rolling(window).mean() , label='J error')

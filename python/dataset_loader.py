@@ -142,7 +142,7 @@ class DatasetLoader:
         interp_quats = interpolate_vicon_to_imu(pd_rot, dat_imu)
         dat_imu = add_time_from_start(dat_imu)
         interp_quats = fix_negative_qw(interp_quats)
-        #dat_imu = fix_magnet_alignment(dat_imu)
+        dat_imu = fix_magnet_alignment(dat_imu)
 
         sampling_rate = 1.0 / np.diff(dat_imu['time_from_start']).mean()
 
