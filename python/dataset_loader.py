@@ -7,7 +7,9 @@ import numpy as np
 import os
 import scipy.io
 from quaternion_library import quatern_prod, quatern_conj
-from preprocess_data.load_raw_justa import fix_magnet_alignment, get_measurement_files, load_raw_justa, interpolate_vicon_to_imu, add_time_from_start, fix_negative_qw
+from preprocess_data.load_raw_justa import fix_coordinate_system, fix_magnet_alignment,\
+    get_measurement_files, load_raw_justa, interpolate_vicon_to_imu, add_time_from_start, fix_negative_qw,\
+    fix_ref_drops
 
 class DatasetLoader:
     """
@@ -56,9 +58,18 @@ class DatasetLoader:
 
         units = ['AP1', 'AP2', 'SH1', 'SH2', 'XS1', 'XS2']
 
+        speed = file_name.split('_')[0]
+        speeds = {'slow': [60, 220], 'medium': [66, 170], 'fast': [70, 150]}
+        if speed not in speeds.keys():
+            raise ValueError(f"Unknown speed in file name: {file_name}")
+
         mat = scipy.io.loadmat(os.path.join(self.base_path_sassari, file_name))
         
-        return self.load_sassari_unit(mat, units[unit_n])
+        dat = self.load_sassari_unit(mat, units[unit_n])
+        
+        dat['interest_range'] = (speeds[speed][0], speeds[speed][1])
+
+        return dat
     
     def load_sassari_unit(self, mat, unit_name):
         
@@ -134,18 +145,22 @@ class DatasetLoader:
         self.datasets[dataset_name] = data
         return data
 
-    def load_justa_raw(self, num):
+    def load_justa_raw(self, num, extend_by = 0):
         fold =  './Datasets/raw_j/'
         files_m = get_measurement_files(fold)
         name, files = list(files_m.items())[ num]
         pd_rot, dat_imu = load_raw_justa(files[1], files[0])
+
         interp_quats = interpolate_vicon_to_imu(pd_rot, dat_imu)
-        dat_imu = add_time_from_start(dat_imu)
         interp_quats = fix_negative_qw(interp_quats)
-        dat_imu = fix_magnet_alignment(dat_imu)
+        interp_quats = fix_ref_drops(interp_quats)
+        
+        dat_imu = add_time_from_start(dat_imu)
+        #dat_imu = fix_magnet_alignment(dat_imu) # already fixed in raw data
+        dat_imu = fix_coordinate_system(dat_imu)
 
         sampling_rate = 1.0 / np.diff(dat_imu['time_from_start']).mean()
-
+        
         data = {
             'time': dat_imu['time_from_start'].values,
             'gyroscope': dat_imu[['gyr_x', 'gyr_y', 'gyr_z']].values,
@@ -155,7 +170,45 @@ class DatasetLoader:
             'mean_sampling_rate': sampling_rate,
             'dataset': name
         }
+
+        if extend_by > 0:
+            last_time = data['time'][-1]
+            dt = 1.0 / sampling_rate
+            extra_time = np.arange(last_time + dt, last_time + dt*(extend_by+2), dt)
+            gyro_mean_last_10 = np.zeros(3) # data['gyroscope'][-10:].mean(axis=0)
+            acc_mean_last_10 = data['accelerometer'][-10:].mean(axis=0)
+            mag_mean_last_10 = data['magnetometer'][-10:].mean(axis=0)
+
+            data['time'] = np.concatenate((data['time'], extra_time[:extend_by]))
+            data['gyroscope'] = np.concatenate((data['gyroscope'], np.tile(gyro_mean_last_10, (extend_by, 1))))
+            data['accelerometer'] = np.concatenate((data['accelerometer'], np.tile(acc_mean_last_10, (extend_by, 1))))
+            data['magnetometer'] = np.concatenate((data['magnetometer'], np.tile(mag_mean_last_10, (extend_by, 1))))
+            data['reference'] = np.concatenate((data['reference'], np.tile(data['reference'][-1], (extend_by, 1))))
+
         return data
+    
+    def all_raw_justa(self):
+        #bad idea
+        dat0 = self.load_justa_raw(0)
+        dat1 = self.load_justa_raw(1)
+        dat2 = self.load_justa_raw(2)
+
+        dat0_end_cut = -600
+
+        dt = dat0['time'][1] - dat0['time'][0]
+        tsh1 = dat0['time'][dat0_end_cut] + dt
+        ths2 = tsh1 + (dat1['time'][-1] - dat1['time'][0]) + dt
+
+        # join datasets
+        dat = {
+            'time': np.concatenate((dat0['time'][:dat0_end_cut], dat1['time'] + tsh1, dat2['time'] + ths2)),
+            'gyroscope': np.concatenate((dat0['gyroscope'][:dat0_end_cut], dat1['gyroscope'], dat2['gyroscope'])),
+            'accelerometer': np.concatenate((dat0['accelerometer'][:dat0_end_cut], dat1['accelerometer'], dat2['accelerometer'])),
+            'magnetometer': np.concatenate((dat0['magnetometer'][:dat0_end_cut], dat1['magnetometer'], dat2['magnetometer'])),
+            'reference': np.concatenate((dat0['reference'][:dat0_end_cut], dat1['reference'], dat2['reference'])),
+            'mean_sampling_rate': (dat0['mean_sampling_rate'] + dat1['mean_sampling_rate'] + dat2['mean_sampling_rate']) / 3
+        }
+        return dat
 
     def load_all_datasets(self):
         """

@@ -4,10 +4,12 @@ import vqf
 import numpy as np
 import pandas as pd
 from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure
-from utils import angle_error, eval_filter_on_dataset
+from utils import angle_error, eval_filter_on_dataset, plot_dataset
 
 dl = DatasetLoader()
 dataset_name = 'slow_v4.mat'
+dataset_name = 'medium_v4.mat'
+dataset_name = 'fast_v4.mat'
 dat = dl.load_sassari_dataset(dataset_name, 2)
 
 b = vqf.BasicVQF(1.0/dat['mean_sampling_rate'], tauAcc=0.994, tauMag=1.44)
@@ -38,8 +40,18 @@ window = 100
 
 skip_start_for_comparison = 5000
 
-error_9D = angle_error(quaternion_result, dat['reference'], align_start=True, shift_samples=shift)
-error_9D_vqf = angle_error(res['quat9D'], dat['reference'], align_start=True, shift_samples=shift)
+# get index near start and stop
+start = dat['time'] < dat['interest_range'][0]
+stop = dat['time'] > dat['interest_range'][1]
+start_index = np.where(start)[0][-1] + 1
+stop_index = np.where(stop)[0][0] - 1
+
+error_9D = angle_error(quaternion_result, dat['reference'], align_start=True, shift_samples=shift, align_index=100)
+error_9D_vqf = angle_error(res['quat9D'], dat['reference'], align_start=True, shift_samples=shift, align_index=100)
+
+error_9D = error_9D[start_index:stop_index]
+error_9D_vqf = error_9D_vqf[start_index:stop_index]
+time_plot = dat['time'][start_index:stop_index]
 
 print(dataset_name)
 diff_error_vqf = (pd.Series(error_9D_vqf) - pd.Series(error_9D_vqf).rolling(window).mean()).to_numpy()
@@ -49,8 +61,8 @@ print(f'Mean diff error vqf: {np.mean(np.abs(diff_error_vqf[window+skip_start_fo
 diff_error = (pd.Series(error_9D) - pd.Series(error_9D).rolling(window).mean()).to_numpy()
 print(f'Mean error: {np.mean(error_9D[skip_start_for_comparison:]):.2f} deg')
 print(f'Mean diff error: {np.mean(np.abs(diff_error[window+skip_start_for_comparison:])):.4f} deg')
-plt.plot(dat['time'][shift:], diff_error, label='Diff Error')
-plt.plot(dat['time'][shift:], error_9D, label='J error')
-plt.plot(dat['time'][shift:], error_9D_vqf, label='VQF error')
+plt.plot(time_plot, diff_error, label='Diff Error')
+plt.plot(time_plot, error_9D, label='J error')
+plt.plot(time_plot, error_9D_vqf, label='VQF error')
 plt.legend()
 plt.show()

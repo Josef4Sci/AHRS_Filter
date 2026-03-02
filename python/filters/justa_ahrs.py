@@ -34,6 +34,7 @@ class JustaAHRSPure:
         self.gyro_scale = gyro_scale.astype(np.float64)
         self.bias_history = []
         self.bias_history.append(self.bias_gyro.copy())
+        self.i = 0
 
     def initFromAccMag(self, accelerometer, magnetometer):
         self.quaternion = wahba_constrained(np.array([0, 0, 1]), accelerometer, np.array([0, 1, 0]), magnetometer)[0]
@@ -175,7 +176,15 @@ class JustaAHRSPure:
             accelerometer: Accelerometer measurement [ax, ay, az]
             magnetometer: Magnetometer measurement [mx, my, mz]
             dt: Sample period in seconds
-        """
+         """
+        # if self.i == 0:
+        #     self.initFromAccMag(accelerometer, magnetometer)
+        # if self.i == 2500:
+        #     self.initFromAccMag(accelerometer, magnetometer)
+        # if self.i == 5000:
+        #     self.initFromAccMag(accelerometer, magnetometer)
+        # self.i += 1
+        
 
         self.quaternion, self.corr_bias = JustaAHRSPure.update_step_optimized(
             self.quaternion.astype(np.float64), gyroscope.astype(np.float64), accelerometer.astype(np.float64), magnetometer.astype(np.float64), np.float64(dt),

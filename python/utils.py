@@ -32,14 +32,12 @@ def interpolate_with_scipy(quaternions, weights):
     return result_rotation.as_quat(scalar_first=True)  # Return in [w, x, y, z] format
 
 
-def angle_error(q_est, q_ref, use_imu=False, align_start=False, shift_samples=0):
+def angle_error(q_est, q_ref, use_imu=False, align_start=False, shift_samples=0, align_index=20):
     
     if align_start:
-        fix_heading_quat = quatern_prod_single(q_ref[0,:], quatern_conj_single(q_est[50,:]))
+        fix_heading_quat = quatern_prod_single(q_ref[align_index,:], quatern_conj_single(q_est[align_index,:]))
         fix_heading_quat_array = np.tile(fix_heading_quat, (q_ref.shape[0], 1))
         q_est_in = quatern_prod(fix_heading_quat_array, q_est)
-        q_est_in2 = quatern_prod(quatern_prod(quatern_conj(fix_heading_quat_array), q_est), fix_heading_quat_array)
-        q_est_in3 = quatern_prod(quatern_prod(fix_heading_quat_array, q_est), quatern_conj(fix_heading_quat_array))
     else:
         q_est_in = q_est
 

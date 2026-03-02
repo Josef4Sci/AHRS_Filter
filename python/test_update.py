@@ -1,84 +1,50 @@
 import time
 from dataset_loader import DatasetLoader
 import matplotlib.pyplot as plt
-from vqf.pyvqf import PyVQF
+from vqf.vqf.pyvqf import PyVQF
 import numpy as np
 import pandas as pd
 from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure, JustaAHRSv2, JustaAHRSv3, JustaAHRSv4
 from utils import angle_error, eval_filter_on_dataset, plot_dataset
 import pickle
-
+from quaternion_library import quatern_prod, quatern_conj
 plot_result = True
 
 dl = DatasetLoader()
 # dataset_name = 'slow_v4.mat'
 # dat = dl.load_sassari_dataset(dataset_name, 2)
 
-dat = dl.load_justa_raw(1)
-plot_dataset(dat)
+dat0 = dl.load_justa_raw(0)
+dat1 = dl.load_justa_raw(1)
+dat2 = dl.load_justa_raw(2)
 
-b = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=0.994, tauMag=1.44, motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False)
-#b.state['gyrQuat'] = dat['reference'][0]
+dat0_end_cut = -600
 
-j_filter = JustaAHRSv4(w_acc=0.001379, w_mag= 0.000072)
+dt = dat0['time'][1] - dat0['time'][0]
+tsh1 = dat0['time'][dat0_end_cut] + dt
+ths2 = tsh1 + (dat1['time'][-1] - dat1['time'][0]) + dt
 
-# res_g = []
-# for i in range(len(dat['gyroscope'])):
-#     b.updateGyr(dat['gyroscope'][i])
-#     res_g.append(b.getQuat3D())
-# res_g = np.array(res_g)
-
-gyr = np.ascontiguousarray(dat['gyroscope'], dtype=np.float64)
-acc = np.ascontiguousarray(dat['accelerometer'], dtype=np.float64)
-mag = np.ascontiguousarray(dat['magnetometer'], dtype=np.float64)
-start_time = time.time()
-res = b.updateBatch(gyr, acc, mag)
-end_time = time.time()
-print(f"Batch update took {end_time - start_time:.4f} seconds")
-#res_g = res['quat9D']
-
-j_filter.initFromAccMag(dat['accelerometer'][0], dat['magnetometer'][0]) # 
-#print(f'Initial: {j_filter.quaternion}')
-start_time = time.time()
-quaternion_result = eval_filter_on_dataset(j_filter, dat)
-end_time = time.time()
-print(f"Justa filter evaluation took {end_time - start_time:.4f} seconds")
-
-shift = -1
-window = 500
-
-skip_start_for_comparison = 10
-
-#save both quaternions to file for comparison
-pikle_data = {
-    'time': dat['time'],
-    'quaternion_justa': quaternion_result,
-    'quaternion_vqf': res['quat9D'],
-    'reference': dat['reference']
+# join datasets
+dat = {
+    'time': np.concatenate((dat0['time'][:dat0_end_cut], dat1['time'] + tsh1, dat2['time'] + ths2)),
+    'gyroscope': np.concatenate((dat0['gyroscope'][:dat0_end_cut], dat1['gyroscope'], dat2['gyroscope'])),
+    'accelerometer': np.concatenate((dat0['accelerometer'][:dat0_end_cut], dat1['accelerometer'], dat2['accelerometer'])),
+    'magnetometer': np.concatenate((dat0['magnetometer'][:dat0_end_cut], dat1['magnetometer'], dat2['magnetometer'])),
+    'reference': np.concatenate((dat0['reference'][:dat0_end_cut], dat1['reference'], dat2['reference'])),
+    'mean_sampling_rate': (dat0['mean_sampling_rate'] + dat1['mean_sampling_rate'] + dat2['mean_sampling_rate']) / 3
 }
-with open('quaternion_comparison.pkl', 'wb') as f:
-    pickle.dump(pikle_data, f)
 
-error_9D = angle_error(quaternion_result, dat['reference'], align_start=True, shift_samples=shift)
 
-# plt.plot(j_filter.coefs, label='Justa AHRS v3')
-# plt.legend()
+
+plot_dataset(dat)
+#plot_dataset(dat1)
+# stack_reference = np.vstack((dat0['reference'], dat1['reference']))
+
+# stack_reference_shifted = np.roll(stack_reference, -1, axis=0)  # Shift by one sample
+# stack_reference_shifted[0] = stack_reference[0]  # Set the first sample to the original first sample
+
+# diff = angle_error(stack_reference, stack_reference_shifted, align_start=False, shift_samples=0)
+
+# # norm_q = np.abs(np.diff(stack_reference[:,0], axis=0))
+# plt.plot(diff, label='Reference Norm')
 # plt.show()
-
-error_9D_vqf = angle_error(res['quat9D'], dat['reference'], align_start=True, shift_samples=shift)
-
-diff_error_vqf = (pd.Series(error_9D_vqf) - pd.Series(error_9D_vqf).rolling(window).mean()).to_numpy()
-print(f'Mean error vqf: {np.mean(error_9D_vqf[skip_start_for_comparison:]):.2f} deg')
-print(f'Mean diff error vqf: {np.mean(np.abs(diff_error_vqf[window+skip_start_for_comparison:])):.4f} deg')
-
-diff_error = (pd.Series(error_9D) - pd.Series(error_9D).rolling(window).mean()).to_numpy()
-print(f'Mean error: {np.mean(error_9D[skip_start_for_comparison:]):.2f} deg')
-print(f'Mean diff error: {np.mean(np.abs(diff_error[window+skip_start_for_comparison:])):.4f} deg')
-
-window = 1
-if plot_result:
-    plt.plot(pd.Series(np.abs(diff_error)).rolling(window).mean(), label='Diff Error')
-    plt.plot(pd.Series(error_9D).rolling(window).mean() , label='J error')
-    plt.plot(pd.Series(error_9D_vqf).rolling(window).mean() , label='VQF error')
-    plt.legend()
-    plt.show()
