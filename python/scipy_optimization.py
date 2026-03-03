@@ -38,7 +38,7 @@ def objective_function(params, datasets):
             quaternion_result = res['quat9D']
 
         else:
-            filter_instance = JustaAHRSPure(w_acc=params[0], w_mag=np.abs(params[1]))
+            filter_instance = JustaAHRSv4(w_acc=params[0], w_mag=np.abs(params[1]))
             filter_instance.initFromAccMag(dataset['accelerometer'][0], dataset['magnetometer'][0]) # Initialize with first measurement
             quaternion_result = eval_filter_on_dataset(filter_instance, dataset, use_imu=False, use_square_err=False)
 
@@ -162,11 +162,20 @@ if __name__ == "__main__":
     # dataset = dataset_loader.load_dataset('Justa')
     # dataset = dataset_loader.all_raw_justa()
 
-    sl = dataset_loader.load_sassari_dataset('slow_v4.mat', 0)
-    med = dataset_loader.load_sassari_dataset('medium_v4.mat', 0)
-    fast = dataset_loader.load_sassari_dataset('fast_v4.mat', 0)
+    # sl = dataset_loader.load_sassari_dataset('slow_v4.mat', 0)
+    # med = dataset_loader.load_sassari_dataset('medium_v4.mat', 0)
+    # fast = dataset_loader.load_sassari_dataset('fast_v4.mat', 0)
+    # datasets = [sl, med, fast]
+    
+    test_datasets = {}
+    broad_white = dataset_loader.broad_white_list_datasets()
+    for i in range(4):
+        file = broad_white[i]
+        dat = dataset_loader.load_broad_dataset(file_name=file)
+        if dat is not None:
+            test_datasets[file] = dat
 
-    datasets = [sl, med, fast]
+    datasets = list(test_datasets.values())
 
     #dataset = pickle.load( open('synthetic_rigid_body_sensor_offset.pkl', 'rb') )#  
 

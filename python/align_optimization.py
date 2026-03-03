@@ -9,7 +9,7 @@ from dataset_loader import DatasetLoader
 from utils import angle_error, eval_filter_on_dataset
 from scipy.optimize import minimize, differential_evolution
 from quaternion_library import quatern_conj_single, quatern_prod_single, quatern_prod, quatern_conj
-from vqf.vqf.pyvqf import PyVQF
+from vqf import PyVQF
 
 #with open('quaternion_comparison.pkl', 'wb') as f:
 
@@ -58,8 +58,17 @@ q_l = []
 q_r = []
 angle_errs = []
 
-for i in range(1):
-    data = dl.load_justa_raw(i)
+broad_white = dl.broad_white_list_datasets()
+
+for i in range(4):
+    # dataset_name = 'medium_v4.mat'
+    # dataset_name = 'fast_v4.mat'
+    # data = dl.load_sassari_dataset(dataset_name, 2)
+    
+    
+    file = broad_white[i]
+    data = dl.load_broad_dataset(file_name=file)
+    
     b = PyVQF(1.0/data['mean_sampling_rate'], tauAcc=0.994, tauMag=1.44, motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False)
     #b.state['gyrQuat'] = dat['reference'][0]
 

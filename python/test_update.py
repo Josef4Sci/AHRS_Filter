@@ -1,7 +1,7 @@
 import time
 from dataset_loader import DatasetLoader
 import matplotlib.pyplot as plt
-from vqf.vqf.pyvqf import PyVQF
+from vqf import PyVQF
 import numpy as np
 import pandas as pd
 from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure, JustaAHRSv2, JustaAHRSv3, JustaAHRSv4

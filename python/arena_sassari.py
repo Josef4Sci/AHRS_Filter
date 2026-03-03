@@ -9,7 +9,7 @@ from utils import angle_error, eval_filter_on_dataset, plot_dataset
 dl = DatasetLoader()
 dataset_name = 'slow_v4.mat'
 dataset_name = 'medium_v4.mat'
-dataset_name = 'fast_v4.mat'
+# dataset_name = 'fast_v4.mat'
 dat = dl.load_sassari_dataset(dataset_name, 2)
 
 b = vqf.BasicVQF(1.0/dat['mean_sampling_rate'], tauAcc=0.994, tauMag=1.44)
