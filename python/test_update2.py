@@ -1,41 +1,68 @@
+"""
+Bézier curve evaluation with *linear* extrapolation outside the control-point
+parameter range, plus plotting.
 
-import scipy.io
-import matplotlib.pyplot as plt
-import pandas as pd
+Key behavior (what you asked for):
+- You pass control points P (shape (n, d)) and a parameter t in the *point scale*
+  where control points are indexed at t = 0, 1, ..., n-1.
+- Internally we normalize to u in [0, 1] using: u = t / (n-1).
+- Inside the range: standard Bézier evaluation at u.
+- Outside the range: linear extrapolation using endpoint derivative, but in the
+  original t scale, so the slope is correct in "points per index".
+
+Meaning:
+  If t < 0:
+     B(t) = B(0) + t * dB/dt|_{t=0}
+  If t > n-1:
+     B(t) = B(n-1) + (t-(n-1)) * dB/dt|_{t=n-1}
+"""
+
+from __future__ import annotations
+
 import numpy as np
+from numpy.typing import NDArray
 
-fol = 'C:\\Users\\josef\\Desktop\\AHRS_Filter\\Datasets\\raw_j\\'
-path ="mereni1_rotace1-2018-10-02-14-03-23-vicon-IMUframe-IMUframe.csv"
-dat_vic = pd.read_csv(fol + path)
-dat_vic['time'] = pd.to_datetime(dat_vic['time'], format='%Y/%m/%d/%H:%M:%S.%f')
-pd_rot = dat_vic[['time','.transform.rotation.x','.transform.rotation.y','.transform.rotation.z','.transform.rotation.w']].to_numpy()
+ArrayF = NDArray[np.floating]
+from bezier_lib import BezierLinearExtrapPointScale
 
-imu_file = 'mereni1_rotace1-2018-10-02-14-03-23-arr_format.csv'
-columns = [ 'time', 'un1', 'un2', 'acc_x', 'acc_y', 'acc_z', 'gyr_x', 'gyr_y', 'gyr_z', 'mag_x', 'mag_y', 'mag_z',  'a','b','c','d']
-dat_imu = pd.read_csv(fol + imu_file, delimiter=';', names=columns)
-acc_mult = 0.00098/16
-deq2rad = np.pi/180
-gyr_mult = deq2rad*2000/32767
-mag_mult = 1/1000
 
-dat_imu['time'] = pd.to_datetime(dat_imu['time'], format='%Y/%m/%d/%H:%M:%S.%f')
-dat_imu['acc_x'] = dat_imu['acc_x'] * acc_mult
-dat_imu['acc_y'] = dat_imu['acc_y'] * acc_mult
-dat_imu['acc_z'] = dat_imu['acc_z'] * acc_mult
-dat_imu['gyr_x'] = dat_imu['gyr_x'] * gyr_mult
-dat_imu['gyr_y'] = dat_imu['gyr_y'] * gyr_mult
-dat_imu['gyr_z'] = dat_imu['gyr_z'] * gyr_mult
-dat_imu['mag_x'] = dat_imu['mag_x'] * mag_mult
-dat_imu['mag_y'] = dat_imu['mag_y'] * mag_mult
-dat_imu['mag_z'] = dat_imu['mag_z'] * mag_mult
+def main():
+ # Example usage + plot
+    P = np.array(
+        [
+            [0.0, 0.0],
+            [0.05, 1.0],
+            [0.1, 1.0],
+            [2.3, 1.0],
+        ],
+        dtype=np.float64,
+    )
 
-plt.plot(dat_imu['time'], dat_imu['gyr_x'], label='gyr_x')
-plt.plot(dat_imu['time'], dat_imu['gyr_y'], label='gyr_y')
-plt.plot(dat_imu['time'], dat_imu['gyr_z'], label='gyr_z')
+    curve = BezierLinearExtrapPointScale(P)
 
-plt.plot(pd_rot[:,0], pd_rot[:,1], label='x')
-plt.plot(pd_rot[:,0], pd_rot[:,2], label='y')
-plt.plot(pd_rot[:,0], pd_rot[:,3], label='z')
-plt.plot(pd_rot[:,0], pd_rot[:,4], label='w')
-plt.legend()
-plt.show()
+    ts = np.array([-0.5, 0.0, 0.25, 0.5, 1.0, 1.5, 2.0], dtype=np.float64)
+    pts = curve(ts)
+
+    print("t (point-scale) -> B(t)")
+    for t, p in zip(ts, pts):
+        print(f"{t:>6.2f} -> {p}")
+
+    # Plot
+    import matplotlib.pyplot as plt
+
+    t_dense = np.linspace(ts.min(), ts.max(), 400)
+    pts_dense = curve(t_dense)
+
+    plt.figure()
+    plt.plot(pts_dense[:, 0], pts_dense[:, 1], label="Bezier (linear extrap)")
+    plt.plot(pts[:, 0], pts[:, 1], "o", label="Samples at ts")
+    plt.plot(P[:, 0], P[:, 1], "k--o", alpha=0.5, label="Control polygon")
+    plt.axis("equal")
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.title("Cached Bézier with linear extrapolation (point-scale parameter)")
+    plt.show()
+
+
+if __name__ == "__main__":
+    main()

@@ -4,24 +4,25 @@ import matplotlib.pyplot as plt
 import vqf
 import numpy as np
 import pandas as pd
-from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure, JustaAHRSv4
+from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure, JustaAHRSv2, JustaAHRSv4
 from utils import angle_error, eval_filter_on_dataset, plot_dataset
 
 test_datasets = {}
 dl = DatasetLoader()
         
-broad_white = dl.broad_white_list_datasets()
-for i in range(4):
-    file = broad_white[i]
-    dat = dl.load_broad_dataset(file_name=file, mean_initial_samples=True)
-    if dat is not None:
-        test_datasets[file] = dat
+# broad_white = dl.broad_white_list_datasets()
+# for i in range(4):
+#     file = broad_white[i]
+#     dat = dl.load_broad_dataset(file_name=file, mean_initial_samples=True)
+#     if dat is not None:
+#         test_datasets[file] = dat
 
 
 # test_datasets['03_undisturbed_slow_rotation_C.mat'] = dl.load_broad_dataset(file_name='03_undisturbed_slow_rotation_C.mat', mean_initial_samples=True)
+test_datasets[ '07_undisturbed_fast_rotation_B.mat'] = dl.load_broad_dataset(file_name='07_undisturbed_fast_rotation_B.mat', mean_initial_samples=True)
 
 test_filters = {
-    #'JustaAHRSInvFast': {'filter': JustaAHRSInvFast( w_acc=0.00034, w_mag=0.00022), 'errors': [], 'type': 0},
+    'JustaAHRSv2': {'filter': JustaAHRSv2( w_acc=0.00034, w_mag=0.00022), 'errors': [], 'type': 0},
     'JustaAHRSv4': {'filter': JustaAHRSv4(w_acc=1, w_mag=1), 'errors': [], 'type': 0},
     'JustaAHRSPure': {'filter': JustaAHRSPure(w_acc=3.15, w_mag=2.15), 'errors': [], 'type': 0},
     'vqf': {'filter': None, 'errors': [], 'type': 1},

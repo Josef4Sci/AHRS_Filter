@@ -43,7 +43,12 @@ def objective_function(params, datasets):
             quaternion_result = eval_filter_on_dataset(filter_instance, dataset, use_imu=False, use_square_err=False)
 
         shift = 0
-        alignIndex = int(dat['start_time']['index']*0.5)
+        sta ='start_time'
+        if dataset.keys().__contains__(sta):
+            alignIndex = int(dataset[sta]['index']*0.5)
+        else:
+            alignIndex = 200
+            
         angle_err = angle_error(quaternion_result, dataset['reference'], align_start=True, shift_samples=shift, align_index=alignIndex)
         
         # Use RMS or absolute error
@@ -56,8 +61,8 @@ def objective_function(params, datasets):
             start_index = np.where(start)[0][-1] + 1
             stop_index = np.where(stop)[0][0] - 1
             angle_err = angle_err[start_index:stop_index]
-        elif dataset.keys().__contains__('start_time'):
-            start_index = int(dataset['start_time']['index'])
+        elif dataset.keys().__contains__(sta):
+            start_index = int(dataset[sta]['index'])
             angle_err = angle_err[start_index:]
         
         mean_error = np.mean(angle_err)
@@ -164,22 +169,24 @@ if __name__ == "__main__":
     
     dataset_loader = DatasetLoader()
     # dataset = dataset_loader.load_dataset('Justa')
-    # dataset = dataset_loader.all_raw_justa()
-
+    sl = dataset_loader.load_justa_raw(0)
+    fast = dataset_loader.load_justa_raw(1)
+    dist = dataset_loader.load_justa_raw(2)
+    datasets = [sl, fast, dist]
     # sl = dataset_loader.load_sassari_dataset('slow_v4.mat', 0)
     # med = dataset_loader.load_sassari_dataset('medium_v4.mat', 0)
     # fast = dataset_loader.load_sassari_dataset('fast_v4.mat', 0)
     # datasets = [sl, med, fast]
     
-    test_datasets = {}
-    broad_white = dataset_loader.broad_white_list_datasets()
-    for i in range(4):
-        file = broad_white[i]
-        dat = dataset_loader.load_broad_dataset(file_name=file, mean_initial_samples=True)
-        if dat is not None:
-            test_datasets[file] = dat
+    # test_datasets = {}
+    # broad_white = dataset_loader.broad_white_list_datasets()
+    # for i in range(4):
+    #     file = broad_white[i]
+    #     dat = dataset_loader.load_broad_dataset(file_name=file, mean_initial_samples=True)
+    #     if dat is not None:
+    #         test_datasets[file] = dat
 
-    datasets = list(test_datasets.values())
+    # datasets = list(test_datasets.values())
 
     #dataset = pickle.load( open('synthetic_rigid_body_sensor_offset.pkl', 'rb') )#  
 

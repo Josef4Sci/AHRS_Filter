@@ -215,3 +215,51 @@ def quatern_conj(q):
     quat_c = np.copy(q)
     quat_c[:, 1:] = -quat_c[:, 1:]
     return quat_c
+
+
+@jit(nopython=True, cache=True)
+def quatern_interpolate_slerp(q1, q2, t):
+    """
+    Spherical linear interpolation (slerp) between two quaternions.
+    
+    Args:
+        q1: First quaternion [w, x, y, z]
+        q2: Second quaternion [w, x, y, z]
+        t: Interpolation factor (0 <= t <= 1)
+        
+    Returns:
+        Interpolated quaternion
+    """
+    dot = np.dot(q1, q2)
+    
+    if dot < 0.0:
+        q2 = -q2
+        dot = -dot
+    
+    if dot > 0.9995:
+        result = q1 + t * (q2 - q1)
+        return fast_normalize_4d(result)
+    
+    theta_0 = np.arccos(dot)
+    theta = theta_0 * t
+    
+    q3 = q2 - q1 * dot
+    q3 = fast_normalize_4d(q3)
+    
+    return q1 * np.cos(theta) + q3 * np.sin(theta)
+
+@jit(nopython=True, cache=True)
+def quatern_interpolate_lerp(q1, q2, t):
+    """
+    Linear interpolation (lerp) between two quaternions.
+    
+    Args:
+        q1: First quaternion [w, x, y, z]
+        q2: Second quaternion [w, x, y, z]
+        t: Interpolation factor (0 <= t <= 1)
+        
+    Returns:
+        Interpolated quaternion
+    """
+    result = (1 - t) * q1 + t * q2
+    return fast_normalize_4d(result)
