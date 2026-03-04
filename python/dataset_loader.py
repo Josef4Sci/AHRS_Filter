@@ -28,10 +28,23 @@ class DatasetLoader:
     def broad_white_list_datasets(self):
         return ['02_undisturbed_slow_rotation_B.mat', '03_undisturbed_slow_rotation_C.mat', '05_undisturbed_slow_rotation_with_breaks_B.mat', '07_undisturbed_fast_rotation_B.mat', '09_undisturbed_fast_rotation_with_breaks_B.mat', '10_undisturbed_slow_translation_A.mat', '11_undisturbed_slow_translation_B.mat', '12_undisturbed_slow_translation_C.mat', '14_undisturbed_slow_translation_with_breaks_B.mat', '16_undisturbed_fast_translation_B.mat', '18_undisturbed_fast_translation_with_breaks_B.mat', '24_disturbed_tapping_A.mat', '25_disturbed_tapping_B.mat', '26_disturbed_phone_vibration_A.mat', '27_disturbed_phone_vibration_B.mat', '32_disturbed_attached_magnet_1cm.mat', '33_disturbed_attached_magnet_2cm.mat']
     
-    def load_broad_dataset(self, file_name):   
+    def broad_start_list_datasets(self):
+        len_wh = len(self.broad_white_list_datasets())
+        first_part_st = [35, 34, 30, 23]
+        next_st = 10
+        missing = len_wh - len(first_part_st)
+        all_starts = first_part_st + [next_st for i in range(missing)]
+        return all_starts
+
+    def load_broad_dataset(self, file_name, mean_initial_samples = False):
 
         if file_name in self.black_list_error_jump:
             return None
+
+        wh = self.broad_white_list_datasets()
+        starts = self.broad_start_list_datasets()
+        st_dict = dict(zip(wh, starts))
+        current_st = st_dict[file_name]
 
         mat = scipy.io.loadmat(os.path.join(self.base_path_broad, file_name))
         
@@ -43,13 +56,26 @@ class DatasetLoader:
         sr = mat['sampling_rate'].squeeze()
         dt = 1.0 / sr        
         timestamp = np.arange(0, length*dt, dt)[:length]
+
+        gyr = mat[f'imu_gyr'][valid_quat,:]
+        acc = mat[f'imu_acc'][valid_quat,:]/self.ms2g
+        mag = mat[f'imu_mag'][valid_quat,:]
+
+        if mean_initial_samples:
+            # index of start of movement, nearest to current_st in timestamp
+            st_idx = np.argmin(np.abs(timestamp - current_st))
+            gyr[:st_idx] = gyr[:st_idx].mean(axis=0)
+            acc[:st_idx] = acc[:st_idx].mean(axis=0)
+            mag[:st_idx] = mag[:st_idx].mean(axis=0)
+
         data = {
             'time': timestamp,
-            'gyroscope': mat[f'imu_gyr'][valid_quat,:],
-            'accelerometer': mat[f'imu_acc'][valid_quat,:]/self.ms2g,
-            'magnetometer': mat[f'imu_mag'][valid_quat,:],
-            'reference': mat[f'opt_quat'][valid_quat,:],
-            'mean_sampling_rate': sr
+            'gyroscope': gyr,
+            'accelerometer': acc,
+            'magnetometer': mag,
+            'reference': quat[valid_quat,:],
+            'mean_sampling_rate': sr,
+            'start_time': {'seconds': current_st, 'index': st_idx}
         }
         return data
        

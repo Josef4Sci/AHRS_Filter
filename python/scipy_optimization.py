@@ -38,12 +38,13 @@ def objective_function(params, datasets):
             quaternion_result = res['quat9D']
 
         else:
-            filter_instance = JustaAHRSv4(w_acc=params[0], w_mag=np.abs(params[1]))
+            filter_instance = JustaAHRSPure(w_acc=params[0], w_mag=np.abs(params[1]))
             filter_instance.initFromAccMag(dataset['accelerometer'][0], dataset['magnetometer'][0]) # Initialize with first measurement
             quaternion_result = eval_filter_on_dataset(filter_instance, dataset, use_imu=False, use_square_err=False)
 
-        shift = -1
-        angle_err = angle_error(quaternion_result, dataset['reference'], align_start=True, shift_samples=shift, align_index=0)
+        shift = 0
+        alignIndex = int(dat['start_time']['index']*0.5)
+        angle_err = angle_error(quaternion_result, dataset['reference'], align_start=True, shift_samples=shift, align_index=alignIndex)
         
         # Use RMS or absolute error
         # if use_square_err:
@@ -55,13 +56,16 @@ def objective_function(params, datasets):
             start_index = np.where(start)[0][-1] + 1
             stop_index = np.where(stop)[0][0] - 1
             angle_err = angle_err[start_index:stop_index]
+        elif dataset.keys().__contains__('start_time'):
+            start_index = int(dataset['start_time']['index'])
+            angle_err = angle_err[start_index:]
         
         mean_error = np.mean(angle_err)
         err += mean_error
     
     for i in range(N):
         print(f"s{i+1}={params[i]:.6f}", end=' ')
-    print(f"-> mean_error={mean_error:.6f}")
+    print(f"-> mean_error={(err/len(datasets)):.6f}")
     
     return err
     
@@ -74,7 +78,7 @@ def optimize_nelder_mead(datasets):
         initial_guess = [1, 1]
     else:
         initial_guess = [0.0004, 1.35e-04]  # Starting from your current values
-    # initial_guess = [0.9,1]
+        initial_guess = [1, 1]
     #
     
     result = minimize(
@@ -171,7 +175,7 @@ if __name__ == "__main__":
     broad_white = dataset_loader.broad_white_list_datasets()
     for i in range(4):
         file = broad_white[i]
-        dat = dataset_loader.load_broad_dataset(file_name=file)
+        dat = dataset_loader.load_broad_dataset(file_name=file, mean_initial_samples=True)
         if dat is not None:
             test_datasets[file] = dat
 

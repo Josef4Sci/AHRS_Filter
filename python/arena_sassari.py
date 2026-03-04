@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import vqf
 import numpy as np
 import pandas as pd
-from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure
+from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure, JustaAHRSv4
 from utils import angle_error, eval_filter_on_dataset, plot_dataset
 
 dl = DatasetLoader()
@@ -14,10 +14,10 @@ dat = dl.load_sassari_dataset(dataset_name, 2)
 
 b = vqf.BasicVQF(1.0/dat['mean_sampling_rate'], tauAcc=0.994, tauMag=1.44)
 #b.state['gyrQuat'] = dat['reference'][0]
+    
 
-
-j_filter = JustaAHRSInvFast( w_acc=0.00034, w_mag=0.00022)
-#j_filter = JustaAHRSPure(w_acc=0.00068, w_mag=0.00044)
+j_filter = JustaAHRSv4( w_acc=1, w_mag=1)
+#j_filter = JustaAHRSPure(w_acc=1, w_mag=1)
 
 bias = dat['gyroscope'][:500].mean(axis=0)
 dat['gyroscope']=dat['gyroscope']*np.array([1.015, 1.015, 1.01]) - bias
@@ -56,11 +56,11 @@ time_plot = dat['time'][start_index:stop_index]
 print(dataset_name)
 diff_error_vqf = (pd.Series(error_9D_vqf) - pd.Series(error_9D_vqf).rolling(window).mean()).to_numpy()
 print(f'Mean error vqf: {np.mean(error_9D_vqf[skip_start_for_comparison:]):.2f} deg')
-print(f'Mean diff error vqf: {np.mean(np.abs(diff_error_vqf[window+skip_start_for_comparison:])):.4f} deg')
+#print(f'Mean diff error vqf: {np.mean(np.abs(diff_error_vqf[window+skip_start_for_comparison:])):.4f} deg')
 
 diff_error = (pd.Series(error_9D) - pd.Series(error_9D).rolling(window).mean()).to_numpy()
 print(f'Mean error: {np.mean(error_9D[skip_start_for_comparison:]):.2f} deg')
-print(f'Mean diff error: {np.mean(np.abs(diff_error[window+skip_start_for_comparison:])):.4f} deg')
+#print(f'Mean diff error: {np.mean(np.abs(diff_error[window+skip_start_for_comparison:])):.4f} deg')
 plt.plot(time_plot, diff_error, label='Diff Error')
 plt.plot(time_plot, error_9D, label='J error')
 plt.plot(time_plot, error_9D_vqf, label='VQF error')

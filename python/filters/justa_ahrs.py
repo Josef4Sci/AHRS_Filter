@@ -128,8 +128,8 @@ class JustaAHRSPure:
         # ============================================
         # OPTIMIZATION 8: Combined correction - fuse operations
         # ============================================
-        w_acc_half = w_acc * 0.5
-        w_mag_half = w_mag * 0.5
+        w_acc_half = w_acc * dt * 0.103143448 
+        w_mag_half = w_mag * dt * 0.0215351
         
         im_x = vec_a_x * w_acc_half + vec_b_x * w_mag_half
         im_y = vec_a_y * w_acc_half + vec_b_y * w_mag_half
@@ -603,7 +603,7 @@ class JustaAHRSv4:
     Justa AHRS Pure Fast implementation
     """
     
-    def __init__(self, quaternion=None, cut_off=0.0528152, w_acc=0.00248, w_mag=1.35e-04, fs=100, test_multip=None):
+    def __init__(self, quaternion=None, cut_off=0.0528152, w_acc=1, w_mag=1, fs=100, test_multip=None):
         self.quaternion = np.array([1.0, 0.0, 0.0, 0.0]) if quaternion is None else np.array(quaternion)
         self.w_acc = w_acc
         self.w_mag = w_mag
@@ -700,10 +700,10 @@ class JustaAHRSv4:
         ca = fast_cross(acc_mes_pred, self.acc_ref)       
         na = np.linalg.norm(ca)
         veca = ca / na
-        veca *= (self.w_acc * modif)
+        veca *= (self.w_acc * dt * 0.103143448 * modif)
         
         #magnetic correction [0 1 0] reference -> mag_mes_pred[0] < 0
-        mag_cor = modif * self.w_mag
+        mag_cor = modif * self.w_mag * dt * 0.0215351
         veca[2] += -mag_cor if mag_pr_x < 0 else mag_cor
         
         # Correction quaternion

@@ -31,6 +31,16 @@ def interpolate_with_scipy(quaternions, weights):
     
     return result_rotation.as_quat(scalar_first=True)  # Return in [w, x, y, z] format
 
+def qdiff(q1, q2):
+    return quatern_prod(q1, quatern_conj(q2))
+
+def angle_diff_deg(qdiff):
+    angle_error = np.abs(2 * np.arctan2(
+        np.linalg.norm(qdiff[:, 1:4], axis=1),
+        qdiff[:, 0]
+    ) * 180 / np.pi)
+    return angle_error
+
 
 def angle_error(q_est, q_ref, use_imu=False, align_start=False, shift_samples=0, align_index=20):
     
@@ -43,26 +53,17 @@ def angle_error(q_est, q_ref, use_imu=False, align_start=False, shift_samples=0,
 
     # implement shift by multiplying with conjugate of reference at shift_samples
     if shift_samples > 0:        
-        q_err = quatern_prod(q_ref[shift_samples:,:], quatern_conj(q_est_in[0:-(shift_samples),:]))
+        q_err = qdiff(q_ref[shift_samples:,:], q_est_in[0:-(shift_samples),:])
     elif shift_samples < 0:
-        q_err = quatern_prod(q_ref[0:shift_samples,:], quatern_conj(q_est_in[-shift_samples:,:]))
+        q_err = qdiff(q_ref[0:shift_samples,:], q_est_in[-shift_samples:,:])
     else:
-        q_err = quatern_prod(q_ref, quatern_conj(q_est_in))
+        q_err = qdiff(q_ref, q_est_in)
     
     # Ensure all quaternions have positive w component
     q_err[q_err[:, 0] < 0] = -q_err[q_err[:, 0] < 0]
     
     # Calculate angular error
-    if use_imu:
-        angle_error = np.abs(2 * np.arctan2(
-            np.linalg.norm(q_err[:, 1:4], axis=1),
-            q_err[:, 0]
-        ) * 180 / np.pi)
-    else:
-        angle_error = np.abs(2 * np.arctan2(
-            np.linalg.norm(q_err[:, 1:4], axis=1),
-            q_err[:, 0]
-        ) * 180 / np.pi)
+    angle_error = angle_diff_deg(q_err)    
         
     return angle_error
 
