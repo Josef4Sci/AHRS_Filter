@@ -1,11 +1,11 @@
 from dataset_loader import DatasetLoader
 import matplotlib.pyplot as plt
-import vqf
+
+from vqf_local.vqf.pyvqf import PyVQF
 import numpy as np
 import pandas as pd
 from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure
 from utils import angle_error, eval_filter_on_dataset, plot_dataset
-
 
     
 dataset_loader = DatasetLoader()
