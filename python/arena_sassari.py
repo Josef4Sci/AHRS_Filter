@@ -1,26 +1,27 @@
 from dataset_loader import DatasetLoader
 import matplotlib.pyplot as plt
-import vqf
+
+from vqf_local.vqf.pyvqf import PyVQF
 import numpy as np
 import pandas as pd
-from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure, JustaAHRSv4
+from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure
 from utils import angle_error, eval_filter_on_dataset, plot_dataset
 
 dl = DatasetLoader()
 dataset_name = 'slow_v4.mat'
 dataset_name = 'medium_v4.mat'
-# dataset_name = 'fast_v4.mat'
+dataset_name = 'fast_v4.mat'
 dat = dl.load_sassari_dataset(dataset_name, 2)
 
-b = vqf.BasicVQF(1.0/dat['mean_sampling_rate'], tauAcc=0.994, tauMag=1.44)
+b = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=0.73, tauMag=0.002)
 #b.state['gyrQuat'] = dat['reference'][0]
     
 
-j_filter = JustaAHRSv4( w_acc=1, w_mag=1)
-#j_filter = JustaAHRSPure(w_acc=1, w_mag=1)
+# j_filter = JustaAHRSv4( w_acc=1, w_mag=1)
+j_filter = JustaAHRSPure(w_acc=.6, w_mag=100.44, linMag=True)
 
-bias = dat['gyroscope'][:500].mean(axis=0)
-dat['gyroscope']=dat['gyroscope']*np.array([1.015, 1.015, 1.01]) - bias
+# bias = dat['gyroscope'][:500].mean(axis=0)
+# dat['gyroscope']=dat['gyroscope']*np.array([1.015, 1.015, 1.01]) - bias
 
 # res_g = []
 # for i in range(len(dat['gyroscope'])):
@@ -58,10 +59,10 @@ diff_error_vqf = (pd.Series(error_9D_vqf) - pd.Series(error_9D_vqf).rolling(wind
 print(f'Mean error vqf: {np.mean(error_9D_vqf[skip_start_for_comparison:]):.2f} deg')
 #print(f'Mean diff error vqf: {np.mean(np.abs(diff_error_vqf[window+skip_start_for_comparison:])):.4f} deg')
 
-diff_error = (pd.Series(error_9D) - pd.Series(error_9D).rolling(window).mean()).to_numpy()
-print(f'Mean error: {np.mean(error_9D[skip_start_for_comparison:]):.2f} deg')
+# diff_error = (pd.Series(error_9D) - pd.Series(error_9D).rolling(window).mean()).to_numpy()
+print(f'Mean error justa: {np.mean(error_9D[skip_start_for_comparison:]):.2f} deg')
 #print(f'Mean diff error: {np.mean(np.abs(diff_error[window+skip_start_for_comparison:])):.4f} deg')
-plt.plot(time_plot, diff_error, label='Diff Error')
+# plt.plot(time_plot, diff_error, label='Diff Error')
 plt.plot(time_plot, error_9D, label='J error')
 plt.plot(time_plot, error_9D_vqf, label='VQF error')
 plt.legend()

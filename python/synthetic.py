@@ -216,7 +216,7 @@ class SimSensorParameters:
     
     def __init__(self, wahba_angle=25.52, mag_intensity=50e-3, acc_scale_err=1e-2,
                  mag_scale_err=5e-2, gyr_scale_err=5e-3, acc_noise_err=1e-2, mag_noise_err=2e-4,
-                 gyr_noise_err=0.1, gyr_off_err=0.2, mag_off_err=7e-4, acc_off_err=3e-3):
+                 gyr_noise_err=0.1, gyr_off_err=0.002, mag_off_err=7e-4, acc_off_err=3e-3):
 
         # Parameters
         self.wahba_angle = wahba_angle  # degrees - magnetic inclination angle

@@ -5,22 +5,22 @@ from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
 import pickle
-import vqf
+from vqf_local.vqf.pyvqf import PyVQF
 
 from quaternion_library import quatern_prod, quatern_conj
 
 
 dataset = pickle.load( open('synthetic_rigid_body_sensor_offset.pkl', 'rb') )
 
-plot_dataset(dataset)
+#plot_dataset(dataset)
 
 test_datasets = {}
 test_datasets[ 'synth'] = dataset
 
 test_filters = {
-    'JustaAHRSv2': {'filter': JustaAHRSv2( w_acc=0.00034, w_mag=0.00022), 'errors': [], 'type': 0},
-    'JustaAHRSv4': {'filter': JustaAHRSInvFast(w_acc=1, w_mag=1), 'errors': [], 'type': 0},
-    'JustaAHRSPure': {'filter': JustaAHRSPure(w_acc=3.15, w_mag=2.15), 'errors': [], 'type': 0},
+    # 'JustaAHRSv2': {'filter': JustaAHRSv2( w_acc=0.00034, w_mag=0.00022), 'errors': [], 'type': 0},
+    'JustaAHRSv4': {'filter': JustaAHRSInvFast(w_acc=0.7, w_mag=0.2), 'errors': [], 'type': 0},
+    # 'JustaAHRSPure': {'filter': JustaAHRSPure(w_acc=1, w_mag=1), 'errors': [], 'type': 0},
     'vqf': {'filter': None, 'errors': [], 'type': 1},
 }
 
@@ -37,8 +37,8 @@ for dataset_name, dat in test_datasets.items():
             gyr = np.ascontiguousarray(dat['gyroscope'], dtype=np.float64)
             acc = np.ascontiguousarray(dat['accelerometer'], dtype=np.float64)
             mag = np.ascontiguousarray(dat['magnetometer'], dtype=np.float64)
-            vq = vqf.BasicVQF(1.0/dat['mean_sampling_rate'], tauAcc=0.994, tauMag=1.44)
-            vq.coeffs['gyrTs'] = 1.0/dat['mean_sampling_rate']            
+            vq = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=0.394, tauMag=1.44)
+            #vq.coeffs['gyrTs'] = 1.0/dat['mean_sampling_rate']            
             res = vq.updateBatch(gyr, acc, mag)
             result = res['quat9D']
         else:
