@@ -15,6 +15,7 @@ import os
 from numba import jit
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from bezier_lib import PolynomialInterpolator
 from utils import wahba_constrained, interpolate_with_scipy
 from quaternion_library_jit import fast_cross, integrate_midpoint, quatern_prod, quatern_interpolate_lerp, quaternion_rotate_vector, quatern_prod_single, fast_normalize_3d, fast_normalize_4d, quatern_conj_single, integrate_euler
 
@@ -24,7 +25,7 @@ class JustaAHRSPure:
     Justa AHRS Pure implementation
     """
     
-    def __init__(self, quaternion=None, w_acc=0.00248, w_mag=1.35e-04, gyro_scale=np.array([1.0, 1.0, 1.0])):
+    def __init__(self, quaternion=None, w_acc=1, w_mag=1, gyro_scale=np.array([1.0, 1.0, 1.0])):
         self.quaternion = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float64) if quaternion is None else np.array(quaternion, dtype=np.float64)
         self.quaternion_1hist = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float64)
         self.quaternion_filt = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float64)
@@ -530,7 +531,7 @@ class JustaAHRSInvFast:
     Justa AHRS Pure Fast implementation
     """
     
-    def __init__(self, quaternion=None, gain=0.0528152, w_acc=0.00248, w_mag=1.35e-04):
+    def __init__(self, quaternion=None, w_acc=1.0, w_mag=1.0):
         self.quaternion = np.array([1.0, 0.0, 0.0, 0.0]) if quaternion is None else np.array(quaternion)
         self.w_acc = w_acc
         self.w_mag = w_mag
@@ -581,10 +582,11 @@ class JustaAHRSInvFast:
         ca = fast_cross(acc_mes_pred, self.acc_ref)
         na = np.linalg.norm(ca)
         veca = ca / na
-        veca *= self.w_acc
+        veca *= (self.w_acc * dt * 0.103143448)
         
         #magnetic correction [0 1 0] reference -> mag_mes_pred[0] < 0
-        veca[2] += -self.w_mag if mag_pr_x < 0 else self.w_mag
+        m_st = self.w_mag * dt * 0.0215351
+        veca[2] += -m_st if mag_pr_x < 0 else m_st
         
         # Correction quaternion
         q_cor = np.array([1, *(veca)])
@@ -603,10 +605,24 @@ class JustaAHRSbezier:
     Justa AHRS Pure Fast implementation
     """
     
-    def __init__(self, points, quaternion=None):
+    def __init__(self, points_x=[0.0, 0.003, 0.01, 0.2, 1.0], points_y=[0.0, 0.17, 0.19, 0.2, 0.2], quaternion=None):
+        
+        # Local degree-3 interpolation (uses 4 nearest points each eval)
+        self.p_cubic = PolynomialInterpolator(points_x, points_y, order=2)
+        # from matplotlib import pyplot as plt
+        # plt.figure()
+        # min_x = np.min(points_x)
+        # max_x = np.max(points_x)
+        # test_p = np.linspace(min_x , max_x , 1000)
+        # test_y = self.p_cubic(test_p)
+        
+        # plt.plot(points_x, points_y, "o", label="Nodes")
+        # plt.plot(test_p, test_y, label=f"Local poly order {self.p_cubic.order}")
+        # plt.show()
+
         self.quaternion = np.array([1.0, 0.0, 0.0, 0.0]) if quaternion is None else np.array(quaternion)
         self.w_acc = 1
-        self.w_mag = 1
+        self.w_mag = 0.2
         self.test = []
         self.acc_ref = np.array([0, 0, 1])
 
@@ -654,8 +670,9 @@ class JustaAHRSbezier:
         ca = fast_cross(acc_mes_pred, self.acc_ref)       
         na = np.linalg.norm(ca)
         self.out_mod.append(na)
+        mult = self.p_cubic(na)
         veca = ca / na
-        veca *= (self.w_acc * dt * 0.103143448)
+        veca *= (mult * dt * 0.103143448)
         
         cm = fast_cross(mag_mes_pred, np.array([0, np.linalg.norm([mag_mes_pred [0], mag_mes_pred [1]]), mag_mes_pred[2]]))      
         nm = np.linalg.norm(cm)

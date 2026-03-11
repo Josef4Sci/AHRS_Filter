@@ -1,129 +1,156 @@
-
 from __future__ import annotations
 
+from dataclasses import dataclass
 import numpy as np
-from numpy.typing import NDArray
-from numba import jit
-
-ArrayF = NDArray[np.floating]
-
-@jit(nopython=True, cache=True)
-def _as_points(P) -> ArrayF:
-    P = np.asarray(P, dtype=float)
-    if P.ndim != 2:
-        raise ValueError(f"P must have shape (n, d). Got {P.shape=}")
-    if P.shape[0] < 2:
-        raise ValueError("Need at least 2 control points.")
-    return P
-
-@jit(nopython=True, cache=True)
-def de_casteljau(P: ArrayF, u: float) -> ArrayF:
-    """Evaluate Bézier at scalar u using De Casteljau (stable)."""
-    Q = P.copy()
-    n = Q.shape[0]
-    for r in range(1, n):
-        Q[: n - r] = (1.0 - u) * Q[: n - r] + u * Q[1 : n - r + 1]
-    return Q[0]
 
 
-@jit(nopython=True, cache=True)
-def derivative_control_points(P: ArrayF) -> ArrayF:
+def _barycentric_weights(x: np.ndarray) -> np.ndarray:
     """
-    Control points of the first derivative curve w.r.t. normalized parameter u in [0,1]:
-      dB/du is a Bézier of degree n-2 with control points:
-        D_i = (n-1) * (P_{i+1} - P_i)
+    Compute barycentric weights for distinct nodes x.
+    O(n^2) time, O(n) memory.
     """
-    P = _as_points(P)
-    deg = P.shape[0] - 1
-    return deg * (P[1:] - P[:-1])
+    x = np.asarray(x, dtype=float)
+    n = x.size
+    w = np.ones(n, dtype=float)
+    for j in range(n):
+        diff = x[j] - np.delete(x, j)
+        if np.any(diff == 0.0):
+            raise ValueError("x values must be distinct")
+        w[j] = 1.0 / np.prod(diff)
+    return w
 
 
-@jit(nopython=True, cache=True)
-def bezier_linear_extrap_pointscale_vector(P, t) -> ArrayF:
+def _barycentric_eval(x_nodes: np.ndarray, y_nodes: np.ndarray, w: np.ndarray, xq):
     """
-    Evaluate Bézier with linear extrapolation, where t is in *point index scale*.
-
-    Control points correspond to:
-      t = 0 -> start
-      t = n-1 -> end
-
-    Returns:
-      (d,) for scalar t
-      (m, d) for array t of length m
+    Evaluate barycentric interpolant defined on (x_nodes, y_nodes) with weights w.
+    Vectorized in xq.
     """
-    P = _as_points(P)
-    n = P.shape[0]
-    L = float(n - 1)  # max t in point scale
+    x_nodes = np.asarray(x_nodes, dtype=float)
+    y_nodes = np.asarray(y_nodes, dtype=float)
+    w = np.asarray(w, dtype=float)
 
-    t = np.asarray(t, dtype=float)
+    xq = np.asarray(xq, dtype=float)
+    xq_flat = xq.ravel()
 
-    # Precompute endpoints in curve space
-    B0 = de_casteljau(P, 0.0)
-    B1 = de_casteljau(P, 1.0)
+    out = np.empty_like(xq_flat, dtype=float)
 
-    # Endpoint derivatives with respect to normalized u
-    D = derivative_control_points(P)
-    dBdu_0 = de_casteljau(D, 0.0)
-    dBdu_1 = de_casteljau(D, 1.0)
+    for k, x in enumerate(xq_flat):
+        # If x hits a node exactly, return that y (avoid division by zero)
+        idx = np.where(x == x_nodes)[0]
+        if idx.size:
+            out[k] = y_nodes[idx[0]]
+            continue
 
-    # Convert to derivatives w.r.t point-scale t:
-    # u = t/L  =>  dB/dt = (dB/du) * (du/dt) = (dB/du) * (1/L)
-    dBdt_0 = dBdu_0 / L
-    dBdt_1 = dBdu_1 / L
+        diff = x - x_nodes
+        t = w / diff
+        out[k] = np.dot(t, y_nodes) / np.sum(t)
 
-    def _eval_scalar(ts: float) -> ArrayF:
-        if ts < 0.0:
-            return B0 + ts * dBdt_0
-        if ts > L:
-            return B1 + (ts - L) * dBdt_1
-
-        u = ts / L  # normalize for in-range evaluation
-        return de_casteljau(P, u)
-
-    out = np.empty((t.size, P.shape[1]), dtype=float)
-    for i, ti in enumerate(t):
-        out[i] = _eval_scalar(float(ti))
-    return out
+    return out.reshape(xq.shape)
 
 
-@jit(nopython=True, cache=True)
-def bezier_linear_extrap_pointscale_scalar(P, t) -> ArrayF:
+@dataclass(frozen=True)
+class PolynomialInterpolator:
     """
-    Evaluate Bézier with linear extrapolation, where t is in *point index scale*.
+    Polynomial interpolator with slow init (precompute) and fast eval.
 
-    Control points correspond to:
-      t = 0 -> start
-      t = n-1 -> end
-
-    Returns:
-      (d,) for scalar t
-      (m, d) for array t of length m
+    Parameters
+    ----------
+    x, y : 1D arrays of data points (x must be distinct)
+    order : int or None
+        - None: global polynomial through all points (degree n-1)
+        - k (>=0): local polynomial of degree k using k+1 nearest nodes per query
+                  (precomputes weights for all sliding windows of size k+1)
+    assume_sorted : bool
+        If False, points are sorted by x at init.
     """
-    P = _as_points(P)
-    n = P.shape[0]
-    L = float(n - 1)  # max t in point scale
+    x: np.ndarray
+    y: np.ndarray
+    order: int | None = None
+    assume_sorted: bool = False
 
-    t = np.asarray(t, dtype=float)
+    def __post_init__(self):
+        x = np.asarray(self.x, dtype=float).copy()
+        y = np.asarray(self.y, dtype=float).copy()
 
-    # Precompute endpoints in curve space
-    B0 = de_casteljau(P, 0.0)
-    B1 = de_casteljau(P, 1.0)
+        if x.ndim != 1 or y.ndim != 1:
+            raise ValueError("x and y must be 1D arrays")
+        if x.size != y.size:
+            raise ValueError("x and y must have the same length")
+        if x.size < 2:
+            raise ValueError("need at least 2 points")
 
-    # Endpoint derivatives with respect to normalized u
-    D = derivative_control_points(P)
-    dBdu_0 = de_casteljau(D, 0.0)
-    dBdu_1 = de_casteljau(D, 1.0)
+        if not self.assume_sorted:
+            p = np.argsort(x)
+            x, y = x[p], y[p]
 
-    # Convert to derivatives w.r.t point-scale t:
-    # u = t/L  =>  dB/dt = (dB/du) * (du/dt) = (dB/du) * (1/L)
-    dBdt_0 = dBdu_0 / L
-    dBdt_1 = dBdu_1 / L
+        if np.any(np.diff(x) == 0.0):
+            raise ValueError("x values must be distinct")
 
-    ts  = float(t)
-    if ts < 0.0:
-        return B0 + ts * dBdt_0
-    if ts > L:
-        return B1 + (ts - L) * dBdt_1
+        object.__setattr__(self, "x", x)
+        object.__setattr__(self, "y", y)
 
-    u = ts / L  # normalize for in-range evaluation
-    return de_casteljau(P, u)
+        n = x.size
+        if self.order is None:
+            # global: degree n-1
+            w = _barycentric_weights(x)
+            object.__setattr__(self, "_mode", "global")
+            object.__setattr__(self, "_w_global", w)
+        else:
+            k = int(self.order)
+            if k < 0:
+                raise ValueError("order must be >= 0 or None")
+            m = k + 1
+            if m > n:
+                raise ValueError(f"order={k} requires at least {m} points (got {n})")
+
+            # Precompute weights for every contiguous window of size m (slow init).
+            # Evaluation uses nearest window index (fast).
+            w_windows = np.empty((n - m + 1, m), dtype=float)
+            for i in range(n - m + 1):
+                w_windows[i] = _barycentric_weights(x[i:i + m])
+
+            object.__setattr__(self, "_mode", "local")
+            object.__setattr__(self, "_m", m)
+            object.__setattr__(self, "_w_windows", w_windows)
+            
+           
+
+    def __call__(self, xq):
+        xq = np.asarray(xq, dtype=float)
+
+        if getattr(self, "_mode") == "global":
+            return _barycentric_eval(self.x, self.y, getattr(self, "_w_global"), xq)
+
+        # local mode: choose a contiguous window of size m near xq
+        m = getattr(self, "_m")
+        w_windows = getattr(self, "_w_windows")
+        x_nodes = self.x
+        y_nodes = self.y
+        n = x_nodes.size
+
+        xq_flat = xq.ravel()
+        out = np.empty_like(xq_flat, dtype=float)
+
+        for k, x in enumerate(xq_flat):
+            # Find insertion point
+            j = int(np.searchsorted(x_nodes, x, side="left"))
+
+            # Center a window of size m around x
+            start = j - m // 2
+            start = max(0, min(start, n - m))
+
+            xs = x_nodes[start:start + m]
+            ys = y_nodes[start:start + m]
+            ws = w_windows[start]
+
+            # Evaluate local barycentric interpolant
+            idx = np.where(x == xs)[0]
+            if idx.size:
+                out[k] = ys[idx[0]]
+            else:
+                diff = x - xs
+                t = ws / diff
+                out[k] = np.dot(t, ys) / np.sum(t)
+
+        return out.reshape(xq.shape)
+    

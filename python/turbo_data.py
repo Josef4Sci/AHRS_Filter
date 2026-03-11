@@ -18,7 +18,7 @@ class TuRBO_BO:
         batch_size: int = 5,
         use_multi: bool = False,
         num_tr: int = 5,
-        dataset=None
+        datasets=None
     ):
         """
         f           : function to minimize
@@ -36,11 +36,11 @@ class TuRBO_BO:
         self.batch_size = batch_size
         self.use_multi = use_multi
         self.num_tr = num_tr
-        self.dataset = dataset
+        self.datasets = datasets
 
         # convert bounds into arrays
-        self.lb = np.array([pbounds[k][0] for k in pbounds])
-        self.ub = np.array([pbounds[k][1] for k in pbounds])
+        self.lb = np.array(pbounds['low_band'])
+        self.ub = np.array(pbounds['up_band'])
 
     def run(self, n_iter: int = 50):
         """
@@ -80,4 +80,4 @@ class TuRBO_BO:
         return x_best, f_best
     
     def new_f(self, x):
-        return self.f(x, self.dataset)
+        return self.f(x, self.datasets)

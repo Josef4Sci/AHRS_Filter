@@ -3,66 +3,69 @@ import matplotlib.pyplot as plt
 import vqf
 import numpy as np
 import pandas as pd
-from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure, JustaAHRSv4
+from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure
 from utils import angle_error, eval_filter_on_dataset, plot_dataset
 
-dl = DatasetLoader()
-dataset_name = 'slow_v4.mat'
-dataset_name = 'medium_v4.mat'
-# dataset_name = 'fast_v4.mat'
-dat = dl.load_sassari_dataset(dataset_name, 2)
 
-b = vqf.BasicVQF(1.0/dat['mean_sampling_rate'], tauAcc=0.994, tauMag=1.44)
-#b.state['gyrQuat'] = dat['reference'][0]
     
+dataset_loader = DatasetLoader()
+sensor = 0
+names = ['slow_v4.mat', 'medium_v4.mat', 'fast_v4.mat']
+test_datasets={}
+for i in range(4):
+    for n in names:    
+        dat = dataset_loader.load_sassari_dataset(n, i)
+        # bias = dat['gyroscope'][:500].mean(axis=0)
+        # dat['gyroscope']=dat['gyroscope']*np.array([1.015, 1.015, 1.01]) - bias
+        test_datasets[n+str(i)] = dat
 
-j_filter = JustaAHRSv4( w_acc=1, w_mag=1)
-#j_filter = JustaAHRSPure(w_acc=1, w_mag=1)
+test_filters = {
+    'JustaAHRSPure': {'filter': JustaAHRSPure(w_acc=0.99, w_mag=0.99), 'errors': [], 'type': 0},
+    'vqf': {'filter': None, 'errors': [], 'type': 1},
+}
 
-bias = dat['gyroscope'][:500].mean(axis=0)
-dat['gyroscope']=dat['gyroscope']*np.array([1.015, 1.015, 1.01]) - bias
+single_dataset = len(test_datasets)==1
 
-# res_g = []
-# for i in range(len(dat['gyroscope'])):
-#     b.updateGyr(dat['gyroscope'][i])
-#     res_g.append(b.getQuat3D())
-# res_g = np.array(res_g)
+errors_filters = dict.fromkeys(test_filters.keys(), [])
 
-res = b.updateBatch(dat['gyroscope'], dat['accelerometer'], dat['magnetometer'])
-#res_g = res['quat9D']
+for dataset_name, dat in test_datasets.items():
+    print(f"Evaluating dataset: {dataset_name}")
 
-j_filter.initFromAccMag(dat['accelerometer'][0], dat['magnetometer'][0]) # 
-#print(f'Initial: {j_filter.quaternion}')
-quaternion_result = eval_filter_on_dataset(j_filter, dat)
+    for filter_name, j_filter in test_filters.items():       
+        if j_filter['type'] == 1:  # vqf
+            # j_filter['filter'].
+            gyr = np.ascontiguousarray(dat['gyroscope'], dtype=np.float64)
+            acc = np.ascontiguousarray(dat['accelerometer'], dtype=np.float64)
+            mag = np.ascontiguousarray(dat['magnetometer'], dtype=np.float64)
+            vq = vqf.BasicVQF(1.0/dat['mean_sampling_rate'], tauAcc=0.994, tauMag=1.44)
+            vq.coeffs['gyrTs'] = 1.0/dat['mean_sampling_rate']            
+            res = vq.updateBatch(gyr, acc, mag)
+            result = res['quat9D']
+        else:
+            j_filter['filter'].initFromAccMag(dat['accelerometer'][0], dat['magnetometer'][0])
+            result = eval_filter_on_dataset(j_filter['filter'], dat)
+        
+        alignIndex = int(dat['start_time']['index']*0.5)
+        error_9D = angle_error(result, dat['reference'], align_start=True, shift_samples=0, align_index=alignIndex)
+        
+        print(f"{filter_name} Mean Error: {np.mean(error_9D):.2f} deg")
+        if single_dataset:
+            j_filter['errors'].append(error_9D)
+        else:
+            j_filter['errors'].append(np.mean(error_9D))
 
-shift = 1
-window = 100
+if single_dataset:
+    for filter_name, j_filter in test_filters.items():
+        plt.plot(j_filter['errors'][0], label=filter_name)
+else:
+    for filter_name, j_filter in test_filters.items():
+        plt.plot(list(test_datasets.keys()), j_filter['errors'], label=filter_name)
 
-skip_start_for_comparison = 5000
-
-# get index near start and stop
-start = dat['time'] < dat['interest_range'][0]
-stop = dat['time'] > dat['interest_range'][1]
-start_index = np.where(start)[0][-1] + 1
-stop_index = np.where(stop)[0][0] - 1
-
-error_9D = angle_error(quaternion_result, dat['reference'], align_start=True, shift_samples=shift, align_index=100)
-error_9D_vqf = angle_error(res['quat9D'], dat['reference'], align_start=True, shift_samples=shift, align_index=100)
-
-error_9D = error_9D[start_index:stop_index]
-error_9D_vqf = error_9D_vqf[start_index:stop_index]
-time_plot = dat['time'][start_index:stop_index]
-
-print(dataset_name)
-diff_error_vqf = (pd.Series(error_9D_vqf) - pd.Series(error_9D_vqf).rolling(window).mean()).to_numpy()
-print(f'Mean error vqf: {np.mean(error_9D_vqf[skip_start_for_comparison:]):.2f} deg')
-#print(f'Mean diff error vqf: {np.mean(np.abs(diff_error_vqf[window+skip_start_for_comparison:])):.4f} deg')
-
-diff_error = (pd.Series(error_9D) - pd.Series(error_9D).rolling(window).mean()).to_numpy()
-print(f'Mean error: {np.mean(error_9D[skip_start_for_comparison:]):.2f} deg')
-#print(f'Mean diff error: {np.mean(np.abs(diff_error[window+skip_start_for_comparison:])):.4f} deg')
-plt.plot(time_plot, diff_error, label='Diff Error')
-plt.plot(time_plot, error_9D, label='J error')
-plt.plot(time_plot, error_9D_vqf, label='VQF error')
+plt.xlabel('Dataset')
+plt.ylabel('Mean Error (deg)')
 plt.legend()
 plt.show()
+
+for filter_name, j_filter in test_filters.items():
+    print(f"{filter_name} Mean Error across datasets: {np.mean(j_filter['errors']):.2f} deg")
+

@@ -3,7 +3,7 @@ import numpy as np
 from scipy.optimize import minimize, differential_evolution
 from vqf.basicvqf import BasicVQF
 from dataset_loader import DatasetLoader
-from filters import (JustaAHRSv2, JustaAHRSInvFast, JustaAHRSPure, JustaAHRSv3, JustaAHRSv4)
+from filters import (JustaAHRSv2, JustaAHRSInvFast, JustaAHRSPure, JustaAHRSv3, JustaAHRSbezier)
 
 from turbo_data import TuRBO_BO
 from utils import angle_error, eval_filter_on_dataset
@@ -38,7 +38,8 @@ def objective_function(params, datasets):
             quaternion_result = res['quat9D']
 
         else:
-            filter_instance = JustaAHRSPure(w_acc=params[0], w_mag=np.abs(params[1]))
+            filter_instance = JustaAHRSbezier(points_x=[0.0, 0.003, 0.01, 0.2, 1.0], 
+                                              points_y=[0.0, params[0],params[1],params[2], params[3]])
             filter_instance.initFromAccMag(dataset['accelerometer'][0], dataset['magnetometer'][0]) # Initialize with first measurement
             quaternion_result = eval_filter_on_dataset(filter_instance, dataset, use_imu=False, use_square_err=False)
 
@@ -84,6 +85,7 @@ def optimize_nelder_mead(datasets):
     else:
         initial_guess = [0.0004, 1.35e-04]  # Starting from your current values
         initial_guess = [1, 1]
+        initial_guess = [0.2,0.2,0.2,0.2]
     #
     
     result = minimize(
@@ -97,14 +99,15 @@ def optimize_nelder_mead(datasets):
     
     return result
 
-def turbo_bo_optimize(dataset):
+def turbo_bo_optimize(datasets):
     
-    pbounds = {"x1": (0, 0.01), "x2": (0, 0.01)} #, "x3": (0, 1)
+    pbounds = {"low_band": (0.01, 0.01, 0.01, 0.01), "up_band": (0.4,0.4,0.4,0.4)} #, "x3": (0, 1)
 
     turbo_bo = TuRBO_BO(
         f=objective_function,
         pbounds=pbounds,
-        dataset=dataset
+        datasets=datasets,
+        num_tr=20
     )
 
     best_pt, best_val = turbo_bo.run(n_iter=5)
@@ -169,14 +172,14 @@ if __name__ == "__main__":
     
     dataset_loader = DatasetLoader()
     # dataset = dataset_loader.load_dataset('Justa')
-    sl = dataset_loader.load_justa_raw(0)
-    fast = dataset_loader.load_justa_raw(1)
-    dist = dataset_loader.load_justa_raw(2)
-    datasets = [sl, fast, dist]
-    # sl = dataset_loader.load_sassari_dataset('slow_v4.mat', 0)
-    # med = dataset_loader.load_sassari_dataset('medium_v4.mat', 0)
-    # fast = dataset_loader.load_sassari_dataset('fast_v4.mat', 0)
-    # datasets = [sl, med, fast]
+    # sl = dataset_loader.load_justa_raw(0)
+    # fast = dataset_loader.load_justa_raw(1)
+    # dist = dataset_loader.load_justa_raw(2)
+    # datasets = [sl, fast, dist]
+    sl = dataset_loader.load_sassari_dataset('slow_v4.mat', 0)
+    med = dataset_loader.load_sassari_dataset('medium_v4.mat', 0)
+    fast = dataset_loader.load_sassari_dataset('fast_v4.mat', 0)
+    datasets = [sl, med, fast]
     
     # test_datasets = {}
     # broad_white = dataset_loader.broad_white_list_datasets()
@@ -195,8 +198,8 @@ if __name__ == "__main__":
     # dataset['gyroscope']=dataset['gyroscope']*np.array([1.015, 1.015, 1.01]) - bias
     
     # # Option 1: Fast local optimization (recommended to try first)
-    print("\n### Method 1: Nelder-Mead (Local Optimization) ###")
-    result = optimize_nelder_mead(datasets)
+    # print("\n### Method 1: Nelder-Mead (Local Optimization) ###")
+    # result = optimize_nelder_mead(datasets)
     
     # # Option 2: Bounded local optimization
     # print("\n### Method 2: L-BFGS-B (Bounded Optimization) ###")
@@ -207,8 +210,8 @@ if __name__ == "__main__":
     # result = optimize_differential_evolution()
     
     # Option 4: TuRBO Bayesian Optimization
-    # print("\n### Method 4: TuRBO Bayesian Optimization ###")
-    # result = turbo_bo_optimize(dataset)
+    print("\n### Method 4: TuRBO Bayesian Optimization ###")
+    result = turbo_bo_optimize(datasets)
     
     # print("\n" + "=" * 60)
     # print("Optimization Complete!")

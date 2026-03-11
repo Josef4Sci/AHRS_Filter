@@ -86,6 +86,7 @@ class DatasetLoader:
 
         speed = file_name.split('_')[0]
         speeds = {'slow': [60, 220], 'medium': [66, 170], 'fast': [70, 150]}
+        start = speeds[speed][0]
         if speed not in speeds.keys():
             raise ValueError(f"Unknown speed in file name: {file_name}")
 
@@ -94,6 +95,9 @@ class DatasetLoader:
         dat = self.load_sassari_unit(mat, units[unit_n])
         
         dat['interest_range'] = (speeds[speed][0], speeds[speed][1])
+        
+        st_idx = np.argmin(np.abs(dat['time'] - start))
+        dat['start_time'] = {'seconds': start, 'index': st_idx}
 
         return dat
     

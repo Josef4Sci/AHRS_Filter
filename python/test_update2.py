@@ -23,7 +23,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 ArrayF = NDArray[np.floating]
-from bezier_lib import BezierLinearExtrapPointScale
+from bezier_lib import BezierLinearExtrapPointScale, bezier_linear_extrap_pointscale_scalar
 
 
 def main():
@@ -33,19 +33,15 @@ def main():
             [0.0, 0.0],
             [0.05, 1.0],
             [0.1, 1.0],
-            [2.3, 1.0],
+            [1.0, 1.0],
         ],
         dtype=np.float64,
     )
 
     curve = BezierLinearExtrapPointScale(P)
 
-    ts = np.array([-0.5, 0.0, 0.25, 0.5, 1.0, 1.5, 2.0], dtype=np.float64)
-    pts = curve(ts)
-
-    print("t (point-scale) -> B(t)")
-    for t, p in zip(ts, pts):
-        print(f"{t:>6.2f} -> {p}")
+    ts = np.array([ 0.0, 0.25, 0.5, 4.0], dtype=np.float64)
+    #pts = curve(ts)
 
     # Plot
     import matplotlib.pyplot as plt
@@ -55,7 +51,7 @@ def main():
 
     plt.figure()
     plt.plot(pts_dense[:, 0], pts_dense[:, 1], label="Bezier (linear extrap)")
-    plt.plot(pts[:, 0], pts[:, 1], "o", label="Samples at ts")
+    # plt.plot(ts, pts[:, 1], "o", label="Samples at ts")
     plt.plot(P[:, 0], P[:, 1], "k--o", alpha=0.5, label="Control polygon")
     plt.axis("equal")
     plt.grid(True, alpha=0.3)

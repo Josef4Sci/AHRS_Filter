@@ -20,8 +20,8 @@ dl = DatasetLoader()
 
 dat = dl.load_justa_raw(1)
 
-j_filter = JustaAHRSbezier(1)
-# j_filter = JustaAHRSPure(w_acc=0.2, w_mag=0.2)
+j_filter = JustaAHRSbezier()
+j_filter = JustaAHRSPure(w_acc=0.2, w_mag=0.2)
 
 j_filter.initFromAccMag(dat['accelerometer'][0], dat['magnetometer'][0]) 
 
