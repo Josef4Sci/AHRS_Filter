@@ -191,6 +191,11 @@ class DatasetLoader:
 
         sampling_rate = 1.0 / np.diff(dat_imu['time_from_start']).mean()
         
+        starts = [7.0, 0.5, 2]
+        start_time = starts[num]
+        st_idx = np.argmin(np.abs(dat_imu['time_from_start'] - start_time))
+        st = {'seconds': start_time, 'index': st_idx}
+        
         data = {
             'time': dat_imu['time_from_start'].values,
             'gyroscope': dat_imu[['gyr_x', 'gyr_y', 'gyr_z']].values,
@@ -198,7 +203,8 @@ class DatasetLoader:
             'magnetometer': dat_imu[['mag_x', 'mag_y', 'mag_z']].values,
             'reference': interp_quats,
             'mean_sampling_rate': sampling_rate,
-            'dataset': name
+            'dataset': name,
+            'start_time': st
         }
 
         if extend_by > 0:

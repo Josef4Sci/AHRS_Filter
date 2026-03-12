@@ -14,10 +14,12 @@ import sys
 import os
 from numba import jit
 
+from cascade_low_pass import LP1, LP2, LP4
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from bezier_lib import PolynomialInterpolator
 from utils import wahba_constrained, interpolate_with_scipy
-from quaternion_library_jit import fast_cross, integrate_midpoint, quatern_prod, quatern_interpolate_lerp, quaternion_rotate_vector, quatern_prod_single, fast_normalize_3d, fast_normalize_4d, quatern_conj_single, integrate_euler
+from quaternion_library_jit import fast_cross, integrate_midpoint, integrate_rk4, quaternion_rotate_vector
+from quaternion_library_jit import quaternion_rotate_vector, quatern_prod_single, fast_normalize_3d, fast_normalize_4d, quatern_conj_single, integrate_euler
 
 
 class JustaAHRSPure:
@@ -25,7 +27,7 @@ class JustaAHRSPure:
     Justa AHRS Pure implementation
     """
     
-    def __init__(self, quaternion=None, w_acc=0.00248, w_mag=1.35e-04, gyro_scale=np.array([1.0, 1.0, 1.0]), linMag=False):
+    def __init__(self, quaternion=None, w_acc=0.00248, w_mag=1.35e-04, gyro_scale=np.array([1.0, 1.0, 1.0]), linMag=False, whole_mag=False):
 
         self.quaternion = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float64) if quaternion is None else np.array(quaternion, dtype=np.float64)
         self.quaternion_1hist = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float64)
@@ -40,6 +42,7 @@ class JustaAHRSPure:
         self.bias_history.append(self.bias_gyro.copy())
         self.i = 0
         self.linMag = linMag
+        self.whole_mag = whole_mag
 
     def initFromAccMag(self, accelerometer, magnetometer):
         self.quaternion = wahba_constrained(np.array([0, 0, 1]), accelerometer, np.array([0, 1, 0]), magnetometer)[0]
@@ -47,7 +50,7 @@ class JustaAHRSPure:
 
     @jit(nopython=True, cache=True, fastmath=True)
     def update_step_optimized(quaternion, gyroscope, accelerometer, magnetometer, 
-                            dt, w_acc, w_mag, bias_gyro, gyro_scale, linMag):
+                            dt, w_acc, w_mag, bias_gyro, gyro_scale, linMag, wholeMag):
         """
         Heavily optimized update step.
         
@@ -132,6 +135,10 @@ class JustaAHRSPure:
             else:
                 vec_b_x = vec_b_y = vec_b_z = 0.0
         
+        if not wholeMag:
+            vec_b_x = 0.0
+            vec_b_y = 0.0
+        
         # ============================================
         # OPTIMIZATION 8: Combined correction - fuse operations
         # ============================================
@@ -189,7 +196,7 @@ class JustaAHRSPure:
         self.quaternion_1hist = self.quaternion_filt.copy()
         self.quaternion_filt, self.corr_bias = JustaAHRSPure.update_step_optimized(
             self.quaternion_filt.astype(np.float64), gyroscope.astype(np.float64), accelerometer.astype(np.float64), magnetometer.astype(np.float64), np.float64(dt),
-            self.w_acc, self.w_mag, self.bias_gyro, self.gyro_scale, self.linMag
+            self.w_acc, self.w_mag, self.bias_gyro, self.gyro_scale, self.linMag, self.whole_mag
         )
 
         #self.quaternion = quatern_interpolate_lerp(self.quaternion_1hist, self.quaternion_filt, 0.5)
@@ -263,7 +270,7 @@ class Particle:
         inv_last = quatern_conj_single(last)
         self.selected_diff_q = quatern_prod_single(inv_last, selected_quaternion)
         
-class JustaAHRSv2:
+class JustaAHRSlp2:
 
     """
     Justa AHRS v2
@@ -274,64 +281,80 @@ class JustaAHRSv2:
     5. repeat    
     """
     
-    def __init__(self, quaternion=None, w_acc=0.00248, w_mag=1.35e-04, delay_steps=5, a_acc=22.0, b_acc=2.0, a_gyr=5.0, b_gyr=2.0):
+    def __init__(self, quaternion=None, w_acc=0.00248, w_mag=1.35e-04, linMag=False, whole_mag=False, lp_stage=2):
         
         self.quaternion = np.array([1.0, 0.0, 0.0, 0.0]) if quaternion is None else np.array(quaternion)
         self.weights_static = np.array([0, 1.0])
-        self.particle_filters = [Particle(w_acc=w_acc, w_mag=w_mag), Particle(w_acc=0, w_mag=0)]
         
         self.defacc = 0.9791458
         self.coefs = []
         self.bias_gyro = np.zeros(3, dtype=np.float64)
+        self.acc_ref = np.array([0.0, 0.0, 1.0])
         
-        self.interp_coeff = 0.5
-        self.a_gyr = a_gyr
-        self.b_gyr = b_gyr
-        self.a_acc = a_acc
-        self.b_acc = b_acc
-        
-        self.hist_depth = delay_steps
-        self.multip_lp = 1
+        self.w_mag = w_mag
+        if lp_stage == 1:
+            self.low_pass_3 = [LP1(alpha=w_acc, y0=0.0), LP1(alpha=w_acc, y0=0.0), LP1(alpha=w_acc, y0=1.0)]
+        elif lp_stage == 2:
+            self.low_pass_3 = [LP2(alpha=w_acc, y0=0.0), LP2(alpha=w_acc, y0=0.0), LP2(alpha=w_acc, y0=1.0)]
+        else:
+            self.low_pass_3 = [LP4(alpha=w_acc, y0=0.0), LP4(alpha=w_acc, y0=0.0), LP4(alpha=w_acc, y0=1.0)]
+            
+        self.linMag = linMag
+        self.whole_mag = whole_mag
         
     def initFromAccMag(self, accelerometer, magnetometer):
         self.quaternion = wahba_constrained(np.array([0, 0, 1]), accelerometer, np.array([0, 1, 0]), magnetometer)[0]
-        for p in self.particle_filters:
-            p.set_quaternion(self.quaternion)
+            
+    def lp2_vec(self, acc):
+        acc_x_lp = self.low_pass_3[0].update(acc[0])
+        acc_y_lp = self.low_pass_3[1].update(acc[1])
+        acc_z_lp = self.low_pass_3[2].update(acc[2])
+        acc_out, val = fast_normalize_3d(np.array([acc_x_lp, acc_y_lp, acc_z_lp], dtype=np.float64))
+        return acc_out
+        
 
     def update(self, gyroscope, accelerometer, magnetometer, dt):
-        """
-        Update the filter with MARG sensor data
         
-        Args:
-            gyroscope: Gyroscope measurement [gx, gy, gz] in rad/s
-            accelerometer: Accelerometer measurement [ax, ay, az]
-            magnetometer: Magnetometer measurement [mx, my, mz]
-            dt: Sample period in seconds
-        """
-        
-        acc_norm = np.linalg.norm(accelerometer)
-                
-        acc_norm_coeff = 1 / (1 + np.exp(np.abs(acc_norm - self.defacc) * self.a_acc - self.b_acc) )
-        
-        gyr_norm_coeff = 1 / (1 + np.exp(np.linalg.norm(gyroscope)*self.a_gyr-self.b_gyr))
-        multiplier = (self.interp_coeff * acc_norm_coeff + (1 - self.interp_coeff) * gyr_norm_coeff)
-        self.multip_lp = self.multip_lp * 0.8 + multiplier * 0.2
+        acc, valid_a = fast_normalize_3d(accelerometer)    
+        if not valid_a:
+            return    
+        mag, valid_m = fast_normalize_3d(magnetometer)
+        if not valid_m:
+            return
 
-        weights = np.array([1-self.multip_lp, self.multip_lp])
-        starts = [p.get_first_quaternion() for p in self.particle_filters]
-        q_start = interpolate_with_scipy(starts, weights)
+        qp = integrate_midpoint(self.quaternion, gyroscope, dt)
 
-        # quats = [p.get_last_quaternion() for p in self.particle_filters]        
-        # q_r = self.interpolate_with_scipy(quats, self.weights_static)
+        inv_pr = quatern_conj_single(qp)
+        acc_mes_pred = quaternion_rotate_vector(inv_pr, acc)
+        acc_mes_pred_lp = self.lp2_vec(acc_mes_pred)
         
-        for p in self.particle_filters:
-            p.set_first_quaternion(q_start)
-            p.predict(gyroscope, accelerometer, magnetometer, dt)
+        mag_mes_pred = quaternion_rotate_vector(inv_pr, mag)
         
-        # quats = [p.get_last_quaternion() for p in self.particle_filters]
-        # q_r = interpolate_with_scipy(quats, self.weights_static)
-        # self.quaternion = q_r
-        self.quaternion = self.particle_filters[1].quaternion
+
+        # Accelerometer correction
+        ca = fast_cross(acc_mes_pred_lp, self.acc_ref)
+        veca = ca * dt
+        
+        cm = fast_cross(mag_mes_pred, np.array([0, np.linalg.norm([mag_mes_pred [0], mag_mes_pred [1]]), mag_mes_pred[2]]))    
+        vecm = cm * dt * self.w_mag
+        
+        if not self.linMag:  
+            nm = np.linalg.norm(cm)
+            vecm = (cm / nm) * 0.215351 * dt * self.w_mag
+        
+        if not self.whole_mag:
+            vecm[0] = 0.0
+            vecm[1] = 0.0
+        
+        # Correction quaternion
+        q_cor = np.array([1, *(veca + vecm)])
+        
+        quat = quatern_prod_single(q_cor, qp)
+        
+        if quat[0] < 0:
+            quat = -quat
+            
+        self.quaternion = fast_normalize_4d(quat)
         
 class JustaAHRSv3:
     """
@@ -535,7 +558,7 @@ class JustaAHRSInvFast:
     Justa AHRS Pure Fast implementation
     """
     
-    def __init__(self, quaternion=None, w_acc=1.0, w_mag=1.0):
+    def __init__(self, quaternion=None, w_acc=1.0, w_mag=1.0, linMag=False, ):
         self.quaternion = np.array([1.0, 0.0, 0.0, 0.0]) if quaternion is None else np.array(quaternion)
         self.w_acc = w_acc
         self.w_mag = w_mag

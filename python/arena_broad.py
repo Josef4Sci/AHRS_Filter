@@ -1,31 +1,37 @@
 import time
 from dataset_loader import DatasetLoader
 import matplotlib.pyplot as plt
-import vqf
+
+from vqf import VQF as PyVQF
 import numpy as np
 import pandas as pd
-from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure, JustaAHRSv2
+from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure, JustaAHRSlp2
 from utils import angle_error, eval_filter_on_dataset, plot_dataset
 
 test_datasets = {}
 dl = DatasetLoader()
         
-# broad_white = dl.broad_white_list_datasets()
-# for i in range(4):
-#     file = broad_white[i]
-#     dat = dl.load_broad_dataset(file_name=file, mean_initial_samples=True)
-#     if dat is not None:
-#         test_datasets[file] = dat
+broad_white = dl.broad_white_list_datasets()
+for i in range(4):
+    file = broad_white[i]
+    dat = dl.load_broad_dataset(file_name=file, mean_initial_samples=True)
+    if dat is not None:
+        test_datasets[file] = dat
 
 
-# test_datasets['03_undisturbed_slow_rotation_C.mat'] = dl.load_broad_dataset(file_name='03_undisturbed_slow_rotation_C.mat', mean_initial_samples=True)
-test_datasets[ '07_undisturbed_fast_rotation_B.mat'] = dl.load_broad_dataset(file_name='07_undisturbed_fast_rotation_B.mat', mean_initial_samples=True)
+#test_datasets['03_undisturbed_slow_rotation_C.mat'] = dl.load_broad_dataset(file_name='03_undisturbed_slow_rotation_C.mat', mean_initial_samples=True)
+#test_datasets[ '07_undisturbed_fast_rotation_B.mat'] = dl.load_broad_dataset(file_name='07_undisturbed_fast_rotation_B.mat', mean_initial_samples=True)
 
 test_filters = {
     #'JustaAHRSv2': {'filter': JustaAHRSv2( w_acc=0.00034, w_mag=0.00022), 'errors': [], 'type': 0},
     #'JustaAHRSv4': {'filter': JustaAHRSv4(w_acc=1, w_mag=1), 'errors': [], 'type': 0},
-    'JustaInvFast' : {'filter': JustaAHRSInvFast(w_acc=4, w_mag=1), 'errors': [], 'type': 0},
-    #'JustaAHRSPure': {'filter': JustaAHRSPure(w_acc=3.15, w_mag=2.15), 'errors': [], 'type': 0},
+    # 'JustaInvFast' : {'filter': JustaAHRSInvFast(w_acc=4, w_mag=1), 'errors': [], 'type': 0},
+    #'JustaAHRSPureMagSetep': {'filter': JustaAHRSPure(w_acc=3.15, w_mag=2.15), 'errors': [], 'type': 0},
+    'JustaAHRSPureMagLin': {'filter': JustaAHRSPure(w_acc=2, w_mag=30.15, linMag=True), 'errors': [], 'type': 0},
+    'JustaAHRSlp2': {'filter': JustaAHRSlp2(w_acc=0.6, w_mag=1.0, linMag=False, whole_mag=False), 'errors': [], 'type': 0},
+    'JustaAHRSlp2wholeMag': {'filter': JustaAHRSlp2(w_acc=0.6, w_mag=1.0, linMag=False, whole_mag=True), 'errors': [], 'type': 0},
+    'JustaAHRSlp2lin': {'filter': JustaAHRSlp2(w_acc=0.6, w_mag=1.15, linMag=True), 'errors': [], 'type': 0},
+    'JustaAHRSlp2linWhole': {'filter': JustaAHRSlp2(w_acc=0.6, w_mag=1.15, linMag=True, whole_mag=True), 'errors': [], 'type': 0},
     'vqf': {'filter': None, 'errors': [], 'type': 1},
 }
 
@@ -43,7 +49,7 @@ for dataset_name, dat in test_datasets.items():
             acc = np.ascontiguousarray(dat['accelerometer'], dtype=np.float64)
             mag = np.ascontiguousarray(dat['magnetometer'], dtype=np.float64)
             start_time = time.time()
-            vq = vqf.BasicVQF(1.0/dat['mean_sampling_rate'], tauAcc=0.994, tauMag=1.44)
+            vq = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=0.994, tauMag=1.44, motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False)
             vq.coeffs['gyrTs'] = 1.0/dat['mean_sampling_rate']            
             res = vq.updateBatch(gyr, acc, mag)
             result = res['quat9D']
@@ -62,31 +68,30 @@ for dataset_name, dat in test_datasets.items():
 
 if single_dataset:
     plt.figure()
-    plt.subplot(4, 1, 1)
     
-    interval = [22000, 24000]
+    fig, axs = plt.subplots(4, 1, sharex=True, constrained_layout=True)
+    
+    # interval = [22000, 24000]
+    interval = [0, -1]
     for filter_name, j_filter in test_filters.items():
         # subplot errors and 
-        plt.plot(j_filter['errors'][0][interval[0]:interval[1]], label=filter_name)
-    plt.legend()
-    plt.subplot(4, 1, 2)
-    plt.plot(dat['gyroscope'][interval[0]:interval[1]])
-    plt.legend(['x','y','z'])
-    plt.subplot(4, 1, 3)
-    plt.plot(dat['accelerometer'][interval[0]:interval[1]])
-    plt.legend(['x','y','z'])
-    plt.subplot(4, 1, 4)
-    plt.plot(dat['magnetometer'][interval[0]:interval[1]])
-    plt.legend(['x','y','z'])
+        axs[0].plot(j_filter['errors'][0][interval[0]:interval[1]], label=filter_name)
+    axs[0].legend()
+    axs[1].plot(dat['gyroscope'][interval[0]:interval[1]])
+    axs[1].legend(['x','y','z'])
+    axs[2].plot(dat['accelerometer'][interval[0]:interval[1]])
+    axs[2].legend(['x','y','z'])
+    axs[3].plot(dat['magnetometer'][interval[0]:interval[1]])
+    axs[3].legend(['x','y','z'])
     plt.show()
 else:
     for filter_name, j_filter in test_filters.items():
         plt.plot(list(test_datasets.keys()), j_filter['errors'], label=filter_name)
 
-plt.xlabel('Dataset')
-plt.ylabel('Mean Error (deg)')
-plt.legend()
-plt.show()
+    plt.xlabel('Dataset')
+    plt.ylabel('Mean Error (deg)')
+    plt.legend()
+    plt.show()
 
 for filter_name, j_filter in test_filters.items():
     print(f"{filter_name} Mean Error across datasets: {np.mean(j_filter['errors']):.2f} deg")

@@ -55,8 +55,8 @@ class TuRBO_BO:
                 lb=self.lb,
                 ub=self.ub,
                 n_init=self.n_init,
-                batch_size=self.batch_size,
-                num_tr=self.num_tr
+                max_evals=n_iter * self.batch_size + self.n_init,
+                batch_size=self.batch_size
             )
         else:
             optimizer = Turbo1(

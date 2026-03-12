@@ -4,14 +4,14 @@ from scipy.optimize import minimize, differential_evolution
 from vqf import VQF as PyVQF
 # from vqf_local.vqf.pyvqf import PyVQF
 from dataset_loader import DatasetLoader
-from filters import (JustaAHRSv2, JustaAHRSInvFast, JustaAHRSPure, JustaAHRSv3)
+from filters import (JustaAHRSlp2, JustaAHRSInvFast, JustaAHRSPure, JustaAHRSv3)
 
 from turbo_data import TuRBO_BO
 from utils import angle_error, eval_filter_on_dataset
 from matplotlib import pyplot as plt
 import pandas as pd
 
-SWITCH_VQF = True
+SWITCH_VQF = False
 RMSE = True
 
 # Define the objective function to minimize
@@ -61,7 +61,8 @@ def objective_function(params, datasets):
             quaternion_result = res['quat9D']
 
         else:
-            filter_instance = JustaAHRSPure(w_acc=params[0], w_mag=np.abs(params[1]), linMag=True)
+            #filter_instance = JustaAHRSlp2(w_acc=params[0], w_mag=np.abs(params[1]), linMag=True, whole_mag=False, lp_stage=1)
+            filter_instance = JustaAHRSPure(w_acc=params[0], w_mag=np.abs(params[1]), linMag=False, whole_mag=False)
             filter_instance.initFromAccMag(dataset['accelerometer'][0], dataset['magnetometer'][0]) # Initialize with first measurement
             quaternion_result = eval_filter_on_dataset(filter_instance, dataset, use_imu=False, use_square_err=False)
 
@@ -107,13 +108,15 @@ def optimize_nelder_mead(datasets):
 
 def turbo_bo_optimize(datasets):
     
-    pbounds = {"low_band": (0.01, 0.01, 0.01, 0.01), "up_band": (0.4,0.4,0.4,0.4)} #, "x3": (0, 1)
+    # pbounds = {"low_band": (0.01, 0.01, 0.01, 0.01), "up_band": (0.4,0.4,0.4,0.4)}
+    
+    pbounds = {"low_band": (0.0, 0.0), "up_band": (2.0,30.0)}
 
     turbo_bo = TuRBO_BO(
         f=objective_function,
         pbounds=pbounds,
         datasets=datasets,
-        num_tr=20
+        num_tr=70
     )
 
     best_pt, best_val = turbo_bo.run(n_iter=5)
@@ -177,23 +180,31 @@ if __name__ == "__main__":
     print("=" * 60)
     
     dataset_loader = DatasetLoader()
-    # dataset = dataset_loader.load_dataset('Justa')
-    # sl = dataset_loader.load_justa_raw(0)
-    # fast = dataset_loader.load_justa_raw(1)
-    # dist = dataset_loader.load_justa_raw(2)
-    # datasets = [sl, fast, dist]
-    # sl = dataset_loader.load_sassari_dataset('slow_v4.mat', 0)
-    # med = dataset_loader.load_sassari_dataset('medium_v4.mat', 0)
-    # fast = dataset_loader.load_sassari_dataset('fast_v4.mat', 0)
-    # datasets = [sl, med, fast]
     
     test_datasets = {}
+    
+    sl = dataset_loader.load_justa_raw(0)
+    fast = dataset_loader.load_justa_raw(1)
+    dist = dataset_loader.load_justa_raw(2)
+    # test_datasets['j_slow'] = sl
+    # test_datasets['j_fast'] = fast
+    # test_datasets['j_dist'] = dist
+    
     broad_white = dataset_loader.broad_white_list_datasets()
     for i in range(4):
         file = broad_white[i]
         dat = dataset_loader.load_broad_dataset(file_name=file, mean_initial_samples=True)
         if dat is not None:
             test_datasets[file] = dat
+
+    dataset_loader = DatasetLoader()
+    names = ['slow_v4.mat', 'medium_v4.mat', 'fast_v4.mat']
+    for i in range(1):
+        for n in names:    
+            dat = dataset_loader.load_sassari_dataset(n, i)
+            # bias = dat['gyroscope'][:500].mean(axis=0)
+            # dat['gyroscope']=dat['gyroscope']*np.array([1.015, 1.015, 1.01]) - bias
+            test_datasets[n+str(i)] = dat
 
     datasets = list(test_datasets.values())
 
@@ -230,32 +241,3 @@ if __name__ == "__main__":
     # print(f"Message: {result.message}")
     
     # # Test the optimal parameters
-    # print("\n" + "=" * 60)
-    # print("Verifying optimal parameters...")
-    # print("=" * 60)
-    
-    # optimal_filter = JustaAHRSInvFast(
-    #     w_acc=result.x[0], 
-    #     w_mag=result.x[1])
-    
-    # optimal_filter.initFromAccMag(dataset['accelerometer'][0], dataset['magnetometer'][0])
-    
-    # quaternion_result = eval_filter_on_dataset(
-    #     optimal_filter, dataset, use_imu=False, use_square_err=False
-    # )
-    # error_9D = angle_error(quaternion_result, dataset['reference'], align_start=True, shift_samples=1)
-    # final_mean_error = np.mean(error_9D)
-
-    # b = vqf.BasicVQF(1.0/dataset['mean_sampling_rate'], tauAcc=result.x[0], tauMag=result.x[1])
-    # gyr = np.ascontiguousarray(dataset['gyroscope'], dtype=np.float64)
-    # acc = np.ascontiguousarray(dataset['accelerometer'], dtype=np.float64)
-    # mag = np.ascontiguousarray(dataset['magnetometer'], dtype=np.float64)
-    # res = b.updateBatch(gyr, acc, mag)
-    # shift = 1
-    # skip_start_for_comparison = 5000
-
-    # error_9D_vqf = angle_error(res['quat9D'], dataset['reference'], align_start=True, shift_samples=shift)
-    # final_mean_error = np.mean(error_9D_vqf)
-
-    
-   # print(f"Final mean error: {final_mean_error:.6f}")
