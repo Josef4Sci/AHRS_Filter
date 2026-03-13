@@ -8,6 +8,8 @@ import pandas as pd
 from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure, JustaAHRSlp2
 from utils import angle_error, eval_filter_on_dataset
 
+RMSE = True
+
 test_datasets = {}
 dataset_loader = DatasetLoader()
 
@@ -69,7 +71,10 @@ for dataset_name, dat in test_datasets.items():
         alignIndex = int(dat['start_time']['index']*0.5)
         error_9D = angle_error(result, dat['reference'], align_start=True, shift_samples=0, align_index=alignIndex)
         
-        print(f"{filter_name} Mean Error: {np.mean(error_9D):.2f} deg")
+        if RMSE:
+            error_9D = np.sqrt(np.mean(error_9D**2))
+        
+        print(f"{filter_name} Mean Error {'RMSE' if RMSE else 'MAE'}: {np.mean(error_9D):.2f} deg")
         if single_dataset:
             j_filter['errors'].append(error_9D)
         else:
