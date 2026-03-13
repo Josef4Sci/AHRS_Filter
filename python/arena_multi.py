@@ -15,10 +15,10 @@ dataset_loader = DatasetLoader()
 
 sl = dataset_loader.load_justa_raw(0)
 fast = dataset_loader.load_justa_raw(1)
-dist = dataset_loader.load_justa_raw(2)
-test_datasets['j_slow'] = sl
-test_datasets['j_fast'] = fast
-test_datasets['j_dist'] = dist
+# dist = dataset_loader.load_justa_raw(2)
+# test_datasets['j_slow'] = sl
+# test_datasets['j_fast'] = fast
+# test_datasets['j_dist'] = dist
 
 broad_white = dataset_loader.broad_white_list_datasets()
 for i in range(4):
@@ -41,7 +41,7 @@ test_filters = {
     #'JustaAHRSlp2+': {'filter': JustaAHRSlp2(w_acc=0.9469, w_mag=0.13, linMag=False, whole_mag=False), 'errors': [], 'type': 0},
     #'JustaAHRSlp2wholeMag+': {'filter': JustaAHRSlp2(w_acc=0.9, w_mag=0.1, linMag=False, whole_mag=True), 'errors': [], 'type': 0},
     'JustaAHRSpureLin': {'filter': JustaAHRSPure(w_acc=0.63, w_mag=24.1, linMag=True, whole_mag=False), 'errors': [], 'type': 0},    
-    'JustaAHRSpure': {'filter': JustaAHRSPure(w_acc=0.585, w_mag=1.0, linMag=False, whole_mag=False), 'errors': [], 'type': 0},    
+    'JustaAHRSpure': {'filter': JustaAHRSPure(w_acc=1.0, w_mag=3.44, linMag=False, whole_mag=False), 'errors': [], 'type': 0},    
     'JustaAHRSlp2lin+': {'filter': JustaAHRSlp2(w_acc=0.89, w_mag=0.49, linMag=True, whole_mag=False), 'errors': [], 'type': 0},
     #'JustaAHRSlp2linWhole+': {'filter': JustaAHRSlp2(w_acc=1.0777, w_mag=0.8, linMag=True, whole_mag=True), 'errors': [], 'type': 0},
     'vqf': {'filter': None, 'errors': [], 'type': 1},
@@ -60,7 +60,7 @@ for dataset_name, dat in test_datasets.items():
             acc = np.ascontiguousarray(dat['accelerometer'], dtype=np.float64)
             mag = np.ascontiguousarray(dat['magnetometer'], dtype=np.float64)
             start_time = time.time()
-            vq = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=0.7, tauMag=2.16, motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False)
+            vq = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=1.1, tauMag=3.6, motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False)
 
             res = vq.updateBatch(gyr, acc, mag)
             result = res['quat9D']

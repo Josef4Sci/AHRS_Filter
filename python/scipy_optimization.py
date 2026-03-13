@@ -61,11 +61,10 @@ def objective_function(params, datasets):
             quaternion_result = res['quat9D']
 
         else:
-            #filter_instance = JustaAHRSlp2(w_acc=params[0], w_mag=np.abs(params[1]), linMag=True, whole_mag=False, lp_stage=1)
-            filter_instance = JustaAHRSPure(w_acc=params[0], w_mag=np.abs(params[1]), linMag=False, whole_mag=False)
+            #filter_instance = JustaAHRSlp2(w_acc=params[0], w_mag=params[1], linMag=True, whole_mag=False, lp_stage=1)
+            filter_instance = JustaAHRSPure(w_acc=params[0], w_mag=params[1], linMag=False, whole_mag=False)
             filter_instance.initFromAccMag(dataset['accelerometer'][0], dataset['magnetometer'][0]) # Initialize with first measurement
             quaternion_result = eval_filter_on_dataset(filter_instance, dataset, use_imu=False, use_square_err=False)
-
             
         angle_err = angle_error(quaternion_result, dataset['reference'], align_start=True, shift_samples=shift, align_index=alignIndex)
         
