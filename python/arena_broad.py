@@ -11,13 +11,32 @@ from utils import angle_error, eval_filter_on_dataset, plot_dataset
 test_datasets = {}
 dl = DatasetLoader()
         
-broad_white = dl.broad_white_list_datasets()
-for i in range(4):
-    file = broad_white[i]
-    dat = dl.load_broad_dataset(file_name=file, mean_initial_samples=True)
-    if dat is not None:
-        test_datasets[file] = dat
+# broad_white = dl.broad_white_list_datasets()
+# for i in range(4):
+#     file = broad_white[i]
+#     dat = dl.load_broad_dataset(file_name=file, mean_initial_samples=True)
+#     if dat is not None:
+#         test_datasets[file] = dat
 
+black_list = dl.black_list_error_jump
+ind = 14
+file = black_list[ind]
+bl_threshold = [1.2, 1.2, 1.8, -1, 1.2, 1.2, 1.3, 1.2, 1.2, 2.3, 2.0, 2.0, -1.0, 2.2, 2.2]
+dataset = dl.load_broad_dataset(file, bypass_black_list=True)
+
+diff = angle_error(dataset['reference'], dataset['reference'], align_start=False, shift_samples=1)
+diff_large = diff > bl_threshold[ind]
+
+
+# if diff_large is true, make true for consequentive N samples
+N=1000
+diff_large = np.convolve(diff_large, np.ones(N, dtype=bool), mode='same') > 0
+#shift half of N to the right, so that the large diff is marked from the start of the jump
+diff_large = np.roll(diff_large, N//2)
+diff_large = np.concatenate((diff_large, np.zeros(1, dtype=bool)))
+dataset['reference'][diff_large] = np.NAN
+
+test_datasets[file] = dataset
 
 #test_datasets['03_undisturbed_slow_rotation_C.mat'] = dl.load_broad_dataset(file_name='03_undisturbed_slow_rotation_C.mat', mean_initial_samples=True)
 #test_datasets[ '07_undisturbed_fast_rotation_B.mat'] = dl.load_broad_dataset(file_name='07_undisturbed_fast_rotation_B.mat', mean_initial_samples=True)
@@ -25,13 +44,13 @@ for i in range(4):
 test_filters = {
     #'JustaAHRSv2': {'filter': JustaAHRSv2( w_acc=0.00034, w_mag=0.00022), 'errors': [], 'type': 0},
     #'JustaAHRSv4': {'filter': JustaAHRSv4(w_acc=1, w_mag=1), 'errors': [], 'type': 0},
-    # 'JustaInvFast' : {'filter': JustaAHRSInvFast(w_acc=4, w_mag=1), 'errors': [], 'type': 0},
+    'JustaInvFast' : {'filter': JustaAHRSInvFast(w_acc=1, w_mag=1), 'errors': [], 'type': 0},
     #'JustaAHRSPureMagSetep': {'filter': JustaAHRSPure(w_acc=3.15, w_mag=2.15), 'errors': [], 'type': 0},
-    'JustaAHRSPureMagLin': {'filter': JustaAHRSPure(w_acc=2, w_mag=30.15, linMag=True), 'errors': [], 'type': 0},
-    'JustaAHRSlp2': {'filter': JustaAHRSlp2(w_acc=0.6, w_mag=1.0, linMag=False, whole_mag=False), 'errors': [], 'type': 0},
-    'JustaAHRSlp2wholeMag': {'filter': JustaAHRSlp2(w_acc=0.6, w_mag=1.0, linMag=False, whole_mag=True), 'errors': [], 'type': 0},
-    'JustaAHRSlp2lin': {'filter': JustaAHRSlp2(w_acc=0.6, w_mag=1.15, linMag=True), 'errors': [], 'type': 0},
-    'JustaAHRSlp2linWhole': {'filter': JustaAHRSlp2(w_acc=0.6, w_mag=1.15, linMag=True, whole_mag=True), 'errors': [], 'type': 0},
+    # 'JustaAHRSPureMagLin': {'filter': JustaAHRSPure(w_acc=2, w_mag=30.15, linMag=True), 'errors': [], 'type': 0},
+    # 'JustaAHRSlp2': {'filter': JustaAHRSlp2(w_acc=0.6, w_mag=1.0, linMag=False, whole_mag=False), 'errors': [], 'type': 0},
+    # 'JustaAHRSlp2wholeMag': {'filter': JustaAHRSlp2(w_acc=0.6, w_mag=1.0, linMag=False, whole_mag=True), 'errors': [], 'type': 0},
+    # 'JustaAHRSlp2lin': {'filter': JustaAHRSlp2(w_acc=0.6, w_mag=1.15, linMag=True), 'errors': [], 'type': 0},
+    # 'JustaAHRSlp2linWhole': {'filter': JustaAHRSlp2(w_acc=0.6, w_mag=1.15, linMag=True, whole_mag=True), 'errors': [], 'type': 0},
     'vqf': {'filter': None, 'errors': [], 'type': 1},
 }
 
@@ -60,11 +79,11 @@ for dataset_name, dat in test_datasets.items():
         alignIndex = int(dat['start_time']['index']*0.5)
         error_9D = angle_error(result, dat['reference'], align_start=True, shift_samples=0, align_index=alignIndex)
         
-        print(f"{filter_name} Mean Error: {np.mean(error_9D):.2f} deg")
+        print(f"{filter_name} Mean Error: {np.nanmean(error_9D):.2f} deg")
         if single_dataset:
             j_filter['errors'].append(error_9D)
         else:
-            j_filter['errors'].append(np.mean(error_9D))
+            j_filter['errors'].append(np.nanmean(error_9D))
 
 if single_dataset:
     plt.figure()
@@ -94,5 +113,5 @@ else:
     plt.show()
 
 for filter_name, j_filter in test_filters.items():
-    print(f"{filter_name} Mean Error across datasets: {np.mean(j_filter['errors']):.2f} deg")
+    print(f"{filter_name} Mean Error across datasets: {np.nanmean(j_filter['errors']):.2f} deg")
 
