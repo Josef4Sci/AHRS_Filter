@@ -1,5 +1,5 @@
 import numpy as np
-from quaternion_library import quatern_conj_single, quatern_prod_single, quatern_prod, quatern_conj
+from quaternion_library_jit import fast_cross, fast_norm, quatern_conj_single, quatern_prod_single, quatern_prod, quatern_conj, quaternion_rotate_vector
 from matplotlib import pyplot as plt
 from scipy.spatial.transform import Rotation, Slerp
 
@@ -45,7 +45,26 @@ def angle_diff_deg(qdiff):
     return angle_error
 
 
+
+def vector_angle_deg(a, b):
+    a = np.asarray(a, dtype=float)
+    b = np.asarray(b, dtype=float)
+
+    na = np.linalg.norm(a)
+    nb = np.linalg.norm(b)
+    if na == 0 or nb == 0:
+        raise ValueError("Angle is undefined for a zero-length vector")
+
+    cos_theta = np.dot(a, b) / (na * nb)
+    cos_theta = np.clip(cos_theta, -1.0, 1.0)  # numerical safety
+    return np.degrees(np.arccos(cos_theta))
+
 def angle_error(q_est, q_ref, use_imu=False, align_start=False, shift_samples=0, align_index=20):
+    
+    min_norm = np.min(np.linalg.norm(q_est, axis=1))
+    if min_norm < 0.9 or min_norm > 1.1:
+        print(f"Warning: Quaternion norms deviate from 1 (min norm: {min_norm:.3f}). Check if quaternions are normalized and in [w, x, y, z] format.")
+        assert False, "Quaternion norms are not close to 1. Check input quaternions."
     
     if align_start:
         fix_heading_quat = quatern_prod_single(q_ref[align_index,:], quatern_conj_single(q_est[align_index,:]))
@@ -54,19 +73,27 @@ def angle_error(q_est, q_ref, use_imu=False, align_start=False, shift_samples=0,
     else:
         q_est_in = q_est
 
-    # implement shift by multiplying with conjugate of reference at shift_samples
-    if shift_samples > 0:        
-        q_err = qdiff(q_ref[shift_samples:,:], q_est_in[0:-(shift_samples),:])
-    elif shift_samples < 0:
-        q_err = qdiff(q_ref[0:shift_samples,:], q_est_in[-shift_samples:,:])
+    if not use_imu:
+        # implement shift by multiplying with conjugate of reference at shift_samples
+        if shift_samples > 0:        
+            q_err = qdiff(q_ref[shift_samples:,:], q_est_in[0:-(shift_samples),:])
+        elif shift_samples < 0:
+            q_err = qdiff(q_ref[0:shift_samples,:], q_est_in[-shift_samples:,:])
+        else:
+            q_err = qdiff(q_ref, q_est_in)
+        
+        # Ensure all quaternions have positive w component
+        q_err[q_err[:, 0] < 0] = -q_err[q_err[:, 0] < 0]
+        
+        # Calculate angular error
+        angle_error = angle_diff_deg(q_err)    
     else:
-        q_err = qdiff(q_ref, q_est_in)
-    
-    # Ensure all quaternions have positive w component
-    q_err[q_err[:, 0] < 0] = -q_err[q_err[:, 0] < 0]
-    
-    # Calculate angular error
-    angle_error = angle_diff_deg(q_err)    
+        acc_ref = np.array([0, 0, 1])
+        angle_error = np.zeros(q_est_in.shape[0])
+        for i in range(q_est_in.shape[0]):
+            est_acc = quaternion_rotate_vector(q_est_in[i], acc_ref)
+            ref_acc = quaternion_rotate_vector(q_ref[i], acc_ref)
+            angle_error[i] = vector_angle_deg(est_acc, ref_acc)
         
     return angle_error
 

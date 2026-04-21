@@ -13,6 +13,7 @@ import pandas as pd
 
 SWITCH_VQF = False
 RMSE = True
+DOF6=True
 
 # Define the objective function to minimize
 def objective_function(params, datasets):
@@ -48,25 +49,36 @@ def objective_function(params, datasets):
         
         alignIndex = int(start_index*0.5)
         
-        bias = dataset['gyroscope'][:start_index].mean(axis=0)
-        dataset_g = dataset['gyroscope'] - bias
+        
+        dat = dataset.copy()
+        bias = dat['gyroscope'][:start_index].mean(axis=0)
+        dat['gyroscope'] = dat['gyroscope'] - bias
 
         # Create filter instance with optimized parameters
         if SWITCH_VQF:
-            gyr = np.ascontiguousarray(dataset_g, dtype=np.float64)
-            acc = np.ascontiguousarray(dataset['accelerometer'], dtype=np.float64)
-            mag = np.ascontiguousarray(dataset['magnetometer'], dtype=np.float64)
-            b = PyVQF(1.0/dataset['mean_sampling_rate'], tauAcc=params[0], tauMag=params[1], motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False)
-            res = b.updateBatch(gyr, acc, mag)
-            quaternion_result = res['quat9D']
-
+            gyr = np.ascontiguousarray(dat['gyroscope'], dtype=np.float64)
+            acc = np.ascontiguousarray(dat['accelerometer'], dtype=np.float64)
+            mag = np.ascontiguousarray(dat['magnetometer'], dtype=np.float64)
+            if DOF6:
+                b = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=params[0], motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False)
+            else:
+                b = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=params[0], tauMag=params[1], motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False)
+            
+            if DOF6:
+                res = b.updateBatch(gyr, acc)
+                quaternion_result = res['quat6D']
+            else:
+                res = b.updateBatch(gyr, acc, mag)
+                quaternion_result = res['quat9D']
         else:
             #filter_instance = JustaAHRSlp2(w_acc=params[0], w_mag=params[1], linMag=True, whole_mag=False, lp_stage=1)
-            filter_instance = JustaAHRSPure(w_acc=params[0], w_mag=params[1], linMag=False, whole_mag=False)
-            filter_instance.initFromAccMag(dataset['accelerometer'][0], dataset['magnetometer'][0]) # Initialize with first measurement
-            quaternion_result = eval_filter_on_dataset(filter_instance, dataset, use_imu=False, use_square_err=False)
+            #filter_instance = JustaAHRSPure(w_acc=params[0], w_mag=params[1] if not DOF6 else None, linMag=False, whole_mag=False, no_mag=DOF6)
+            filter_instance = JustaAHRSInvFast(w_acc=params[0], w_mag=params[1] if not DOF6 else None, no_mag=DOF6)
             
-        angle_err = angle_error(quaternion_result, dataset['reference'], align_start=True, shift_samples=shift, align_index=alignIndex)
+            filter_instance.initFromAccMag(dat['accelerometer'][0], dat['magnetometer'][0]) # Initialize with first measurement
+            quaternion_result = eval_filter_on_dataset(filter_instance, dat, use_imu=False, use_square_err=False)
+            
+        angle_err = angle_error(quaternion_result, dat['reference'], align_start=True, shift_samples=shift, align_index=alignIndex, use_imu=DOF6)
         
         angle_err = angle_err[start_index:stop_index]        
         
@@ -108,8 +120,10 @@ def optimize_nelder_mead(datasets):
 def turbo_bo_optimize(datasets):
     
     # pbounds = {"low_band": (0.01, 0.01, 0.01, 0.01), "up_band": (0.4,0.4,0.4,0.4)}
-    
-    pbounds = {"low_band": (0.0, 0.0), "up_band": (2.0,30.0)}
+    if DOF6:
+        pbounds = {"low_band": (0.0), "up_band": (10.0)}
+    else:
+        pbounds = {"low_band": (0.0, 0.0), "up_band": (10.0,10.0)}
 
     turbo_bo = TuRBO_BO(
         f=objective_function,

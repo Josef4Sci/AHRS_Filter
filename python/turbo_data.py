@@ -39,9 +39,13 @@ class TuRBO_BO:
         self.datasets = datasets
 
         # convert bounds into arrays
-        self.lb = np.array(pbounds['low_band'])
-        self.ub = np.array(pbounds['up_band'])
-
+        if type(pbounds['low_band'])==float:
+            self.lb = np.array([pbounds['low_band']])
+            self.ub = np.array([pbounds['up_band']])
+        else:
+            self.lb = np.array(pbounds['low_band'])
+            self.ub = np.array(pbounds['up_band'])
+            
     def run(self, n_iter: int = 50):
         """
         Run the TuRBO optimization for n_iter rounds.
