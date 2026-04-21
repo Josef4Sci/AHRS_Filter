@@ -36,15 +36,17 @@ class DatasetLoader:
         all_starts = first_part_st + [next_st for i in range(missing)]
         return all_starts
 
-    def load_broad_dataset(self, file_name, mean_initial_samples = False):
+    def load_broad_dataset(self, file_name, mean_initial_samples = False, bypass_black_list = False):
 
-        if file_name in self.black_list_error_jump:
+        if file_name in self.black_list_error_jump and not bypass_black_list:
             return None
 
         wh = self.broad_white_list_datasets()
         starts = self.broad_start_list_datasets()
         st_dict = dict(zip(wh, starts))
-        current_st = st_dict[file_name]
+        current_st = st_dict.get(file_name)
+        if current_st is None:
+            current_st = 10
 
         mat = scipy.io.loadmat(os.path.join(self.base_path_broad, file_name))
         
@@ -61,9 +63,9 @@ class DatasetLoader:
         acc = mat[f'imu_acc'][valid_quat,:]/self.ms2g
         mag = mat[f'imu_mag'][valid_quat,:]
 
+        st_idx = np.argmin(np.abs(timestamp - current_st))
         if mean_initial_samples:
             # index of start of movement, nearest to current_st in timestamp
-            st_idx = np.argmin(np.abs(timestamp - current_st))
             gyr[:st_idx] = gyr[:st_idx].mean(axis=0)
             acc[:st_idx] = acc[:st_idx].mean(axis=0)
             mag[:st_idx] = mag[:st_idx].mean(axis=0)

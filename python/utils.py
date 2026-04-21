@@ -34,6 +34,9 @@ def interpolate_with_scipy(quaternions, weights):
 def qdiff(q1, q2):
     return quatern_prod(q1, quatern_conj(q2))
 
+def qdiff_single(q1, q2):
+    return quatern_prod_single(q1, quatern_conj_single(q2))
+
 def angle_diff_deg(qdiff):
     angle_error = np.abs(2 * np.arctan2(
         np.linalg.norm(qdiff[:, 1:4], axis=1),
