@@ -7,3 +7,6 @@
 [submodule "python/vqf"]
 	path = python/vqf
 	url = https://github.com/dlaidig/vqf.git
+[submodule "python/vqf_local"]
+	path = python/vqf_local
+	url = https://github.com/dlaidig/vqf.git
