@@ -27,7 +27,7 @@ class JustaAHRSPure:
     Justa AHRS Pure implementation
     """
     
-    def __init__(self, quaternion=None, w_acc=0.00248, w_mag=1.35e-04, gyro_scale=np.array([1.0, 1.0, 1.0]), linMag=False, whole_mag=False):
+    def __init__(self, quaternion=None, w_acc=0.00248, w_mag=1.35e-04, gyro_scale=np.array([1.0, 1.0, 1.0]), linMag=False, whole_mag=False, no_mag=False):
 
         self.quaternion = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float64) if quaternion is None else np.array(quaternion, dtype=np.float64)
         self.quaternion_1hist = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float64)
@@ -43,14 +43,15 @@ class JustaAHRSPure:
         self.i = 0
         self.linMag = linMag
         self.whole_mag = whole_mag
-
+        self.no_mag = no_mag
+        
     def initFromAccMag(self, accelerometer, magnetometer):
         self.quaternion = wahba_constrained(np.array([0, 0, 1]), accelerometer, np.array([0, 1, 0]), magnetometer)[0]
         self.quaternion_1hist = self.quaternion_filt = self.quaternion.copy()
 
     @jit(nopython=True, cache=True, fastmath=True)
     def update_step_optimized(quaternion, gyroscope, accelerometer, magnetometer, 
-                            dt, w_acc, w_mag, bias_gyro, gyro_scale, linMag, wholeMag):
+                            dt, w_acc, w_mag, bias_gyro, gyro_scale, linMag, wholeMag, no_mag):
         """
         Heavily optimized update step.
         
@@ -120,30 +121,38 @@ class JustaAHRSPure:
         # ============================================
         # OPTIMIZATION 7: Magnetometer correction - same optimization
         # ============================================
-        vec_b_x = mag[1]*mag_mes_pred[2] - mag[2]*mag_mes_pred[1]
-        vec_b_y = mag[2]*mag_mes_pred[0] - mag[0]*mag_mes_pred[2]
-        vec_b_z = mag[0]*mag_mes_pred[1] - mag[1]*mag_mes_pred[0]
         
-        if not linMag:
-            cm_norm = np.sqrt(vec_b_x*vec_b_x + vec_b_y*vec_b_y + vec_b_z*vec_b_z)
-            
-            if cm_norm > 1e-10:
-                inv_cm_norm = 1.0 / cm_norm
-                vec_b_x *= inv_cm_norm
-                vec_b_y *= inv_cm_norm
-                vec_b_z *= inv_cm_norm
-            else:
-                vec_b_x = vec_b_y = vec_b_z = 0.0
-        
-        if not wholeMag:
+        if no_mag:
             vec_b_x = 0.0
             vec_b_y = 0.0
-        
+            vec_b_z = 0.0
+            w_mag_half = 0.0
+        else:
+            vec_b_x = mag[1]*mag_mes_pred[2] - mag[2]*mag_mes_pred[1]
+            vec_b_y = mag[2]*mag_mes_pred[0] - mag[0]*mag_mes_pred[2]
+            vec_b_z = mag[0]*mag_mes_pred[1] - mag[1]*mag_mes_pred[0]
+            
+            if not linMag:
+                cm_norm = np.sqrt(vec_b_x*vec_b_x + vec_b_y*vec_b_y + vec_b_z*vec_b_z)
+                
+                if cm_norm > 1e-10:
+                    inv_cm_norm = 1.0 / cm_norm
+                    vec_b_x *= inv_cm_norm
+                    vec_b_y *= inv_cm_norm
+                    vec_b_z *= inv_cm_norm
+                else:
+                    vec_b_x = vec_b_y = vec_b_z = 0.0
+            
+            if not wholeMag:
+                vec_b_x = 0.0
+                vec_b_y = 0.0        
+            
+            w_mag_half = w_mag * dt * 0.0215351
+            
         # ============================================
         # OPTIMIZATION 8: Combined correction - fuse operations
         # ============================================
         w_acc_half = w_acc * dt * 0.103143448 
-        w_mag_half = w_mag * dt * 0.0215351
         
         im_x = vec_a_x * w_acc_half + vec_b_x * w_mag_half
         im_y = vec_a_y * w_acc_half + vec_b_y * w_mag_half
@@ -196,7 +205,7 @@ class JustaAHRSPure:
         self.quaternion_1hist = self.quaternion_filt.copy()
         self.quaternion_filt, self.corr_bias = JustaAHRSPure.update_step_optimized(
             self.quaternion_filt.astype(np.float64), gyroscope.astype(np.float64), accelerometer.astype(np.float64), magnetometer.astype(np.float64), np.float64(dt),
-            self.w_acc, self.w_mag, self.bias_gyro, self.gyro_scale, self.linMag, self.whole_mag
+            self.w_acc, self.w_mag, self.bias_gyro, self.gyro_scale, self.linMag, self.whole_mag, self.no_mag
         )
 
         #self.quaternion = quatern_interpolate_lerp(self.quaternion_1hist, self.quaternion_filt, 0.5)
@@ -516,16 +525,14 @@ class JustaAHRSInv:
         qp = integrate_euler(self.quaternion, gyroscope, dt)
         
         # Predicted accelerometer
-        ar = np.array([0, 0, 1])
         inv_pred = quatern_conj_single(qp)
         acc_mes_pred = quaternion_rotate_vector(inv_pred, acc)
-
-
         mag_mes_pred = quaternion_rotate_vector(inv_pred, mag)
         
         mr_ref = np.array([0, np.linalg.norm([mag_mes_pred [0], mag_mes_pred [1]]), mag_mes_pred[2]])
         
         # Accelerometer correction
+        ar = np.array([0, 0, 1])
         ca = np.cross(acc_mes_pred, ar)
         na = np.linalg.norm(ca)
         veca = ca / na
@@ -558,12 +565,13 @@ class JustaAHRSInvFast:
     Justa AHRS Pure Fast implementation
     """
     
-    def __init__(self, quaternion=None, w_acc=1.0, w_mag=1.0, linMag=False, ):
+    def __init__(self, quaternion=None, w_acc=1.0, w_mag=1.0, no_mag=False):
         self.quaternion = np.array([1.0, 0.0, 0.0, 0.0]) if quaternion is None else np.array(quaternion)
         self.w_acc = w_acc
         self.w_mag = w_mag
         self.test = []
         self.acc_ref = np.array([0, 0, 1])
+        self.no_mag = no_mag
     
     def initFromAccMag(self, accelerometer, magnetometer):
         """
@@ -598,22 +606,27 @@ class JustaAHRSInvFast:
         inv_pr = quatern_conj_single(qp)
         acc_mes_pred = quaternion_rotate_vector(inv_pr, acc)
         
-        #x part rotation from quat_inv
-        rot_x = np.array([  2*(0.5 - qp[2]**2 - qp[3]**2),
-                            2*(qp[1]*qp[2] - qp[0]*qp[3]),
-                            2*(qp[0]*qp[2] + qp[1]*qp[3]) ])
-        
-        mag_pr_x = np.dot(rot_x, mag)
+        if self.no_mag:
+            m_step_dir = 0.0
+        else:
+            #x part rotation from quat_inv
+            rot_x = np.array([  2*(0.5 - qp[2]**2 - qp[3]**2),
+                                2*(qp[1]*qp[2] - qp[0]*qp[3]),
+                                2*(qp[0]*qp[2] + qp[1]*qp[3]) ])
+            
+            mag_pr_x = np.dot(rot_x, mag)
 
+            mstep = self.w_mag * dt * 0.0215351
+            m_step_dir =-mstep if mag_pr_x < 0 else mstep            
+        
         # Accelerometer correction
         ca = fast_cross(acc_mes_pred, self.acc_ref)
         na = np.linalg.norm(ca)
         veca = ca / na
         veca *= (self.w_acc * dt * 0.103143448)
-        mstep = self.w_mag * dt * 0.0215351
         
         #magnetic correction [0 1 0] reference -> mag_mes_pred[0] < 0
-        veca[2] += -mstep if mag_pr_x < 0 else mstep
+        veca[2] += m_step_dir
         
         # Correction quaternion
         q_cor = np.array([1, *(veca)])

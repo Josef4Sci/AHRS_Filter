@@ -2,7 +2,14 @@ import time
 from dataset_loader import DatasetLoader
 import matplotlib.pyplot as plt
 
-from vqf import VQF as PyVQF
+import sys
+sys.path.append('python\\vqf_local\\vqf')  # folder containing vqf.pyx and vqf.pyxbld
+
+import pyximport
+pyximport.install(setup_args={"include_dirs": []}, language_level=3)
+
+from vqf import VQF
+
 import numpy as np
 import pandas as pd
 from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure, JustaAHRSlp2
@@ -49,7 +56,7 @@ for dataset_name, dat in test_datasets.items():
             acc = np.ascontiguousarray(dat['accelerometer'], dtype=np.float64)
             mag = np.ascontiguousarray(dat['magnetometer'], dtype=np.float64)
             start_time = time.time()
-            vq = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=0.994, tauMag=1.44, motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False)
+            vq = VQF(1.0/dat['mean_sampling_rate'], tauAcc=0.994, tauMag=1.44, motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False)
             vq.coeffs['gyrTs'] = 1.0/dat['mean_sampling_rate']            
             res = vq.updateBatch(gyr, acc, mag)
             result = res['quat9D']
