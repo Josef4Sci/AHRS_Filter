@@ -77,7 +77,8 @@ class DatasetLoader:
             'magnetometer': mag,
             'reference': quat[valid_quat,:],
             'mean_sampling_rate': sr,
-            'start_time': {'seconds': current_st, 'index': st_idx}
+            'start_time': {'seconds': current_st, 'index': st_idx},
+            'static_detection': { 'acc_threshold': 0.07, 'gyr_threshold': 0.1, 'mag_threshold': 9}
         }
         return data
        
@@ -100,6 +101,7 @@ class DatasetLoader:
         
         st_idx = np.argmin(np.abs(dat['time'] - start))
         dat['start_time'] = {'seconds': start, 'index': st_idx}
+        dat['static_detection'] = { 'acc_threshold': 0.002, 'gyr_threshold': 0.05, 'mag_threshold': 0.04}
 
         return dat
     
@@ -171,7 +173,8 @@ class DatasetLoader:
             'accelerometer': mat['Accelerometer'],
             'magnetometer': mat['Magnetometer'],
             'reference': mat['qViconReference'],
-            'mean_sampling_rate': mean_sampling_rate
+            'mean_sampling_rate': mean_sampling_rate,
+            'static_detection': { 'acc_threshold': 0.07, 'gyr_threshold': 0.3, 'mag_threshold': 0.1}
         }
         
         self.datasets[dataset_name] = data
