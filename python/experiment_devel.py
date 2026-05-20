@@ -25,7 +25,7 @@ test_datasets[ 'synth'] = dataset
 test_filters = {
     # 'JustaAHRSv2': {'filter': JustaAHRSv2( w_acc=0.00034, w_mag=0.00022), 'errors': [], 'type': 0},
     #
-    'JustaAHRSv4': {'filter': JustaAHRSInvFast(w_acc=0.7, w_mag=0.2), 'errors': [], 'type': 0},
+    'JustaAHRSv4': {'filter': JustaAHRSInvFast(w_acc=0.7, w_mag=0.5), 'errors': [], 'type': 0},
     # 'JustaAHRSPure': {'filter': JustaAHRSPure(w_acc=1, w_mag=1), 'errors': [], 'type': 0},
     'vqf': {'filter': None, 'errors': [], 'type': 1, 'par1': False},
     'justa_cpp': {'filter': None, 'errors': [], 'type': 1, 'par1': True},
@@ -46,9 +46,9 @@ for dataset_name, dat in test_datasets.items():
             acc = np.ascontiguousarray(dat['accelerometer'], dtype=np.float64)
             mag = np.ascontiguousarray(dat['magnetometer'], dtype=np.float64)
             
-            j_filter['filter']
+            
             tauAcc = 0.7
-            tauMag = 0.2 
+            tauMag = 0.5 
             useAccStep = j_filter['par1']
             vq = VQF(1.0/dat['mean_sampling_rate'], tauAcc=tauAcc, tauMag=tauMag, useAccStepWhole=useAccStep)
             vq.setStepQuat(np.array([1,0,0,0], dtype=np.float64))

@@ -1,5 +1,9 @@
 from dataset_loader import DatasetLoader
 import matplotlib.pyplot as plt
+import sys
+sys.path.append('python\\vqf_local\\vqf')  # folder containing vqf.pyx and vqf.pyxbld
+import pyximport
+pyximport.install(setup_args={"include_dirs": []}, language_level=3)
 
 from vqf import VQF as PyVQF
 # from vqf_local.vqf.pyvqf import PyVQF
@@ -8,7 +12,10 @@ import pandas as pd
 from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure, JustaAHRSlp2
 from utils import angle_error, eval_filter_on_dataset, plot_dataset
 
-    
+
+RMSE = True
+DOF6 = False
+
 dataset_loader = DatasetLoader()
 
 sl = dataset_loader.load_justa_raw(0)
@@ -16,18 +23,20 @@ fast = dataset_loader.load_justa_raw(1)
 dist = dataset_loader.load_justa_raw(2)
 datasets = [sl, fast, dist]
 
-test_datasets={'slow': sl, 'fast': fast, 'dist': dist}
+test_datasets={'slow': sl} #, 'fast': fast, 'dist': dist
 
-test_filters = {
-    'JustaAHRSPure': {'filter': JustaAHRSPure(w_acc=0.99, w_mag=0.99), 'errors': [], 'type': 0},
-    'JustaAHRSPureLpimplem': {'filter': JustaAHRSlp2(w_acc=0.02, w_mag=0.082, linMag=False, whole_mag=True, lp_stage=1), 'errors': [], 'type': 0},
-    'JustaAHRSPureMagLin': {'filter': JustaAHRSPure(w_acc=0.6, w_mag=80.15, linMag=True), 'errors': [], 'type': 0},
-    'JustaAHRSlp2': {'filter': JustaAHRSlp2(w_acc=0.6, w_mag=1.0, linMag=False, whole_mag=False), 'errors': [], 'type': 0},
-    'JustaAHRSlp2wholeMag': {'filter': JustaAHRSlp2(w_acc=0.6, w_mag=1.0, linMag=False, whole_mag=True), 'errors': [], 'type': 0},
-    'JustaAHRSlp2lin': {'filter': JustaAHRSlp2(w_acc=0.6, w_mag=1.15, linMag=True), 'errors': [], 'type': 0},
-    'JustaAHRSlp2linWhole': {'filter': JustaAHRSlp2(w_acc=0.6, w_mag=1.15, linMag=True, whole_mag=True), 'errors': [], 'type': 0},
-    'vqf': {'filter': None, 'errors': [], 'type': 1},
-}
+plot_dataset(test_datasets['slow'])
+
+if DOF6:
+    test_filters = { # 6DOF
+        'vqf': {'filter': {'tauAcc': 1.1, 'tauMag': 0}, 'errors': [], 'type': 1},
+        'justa_cpp': {'filter': {'tauAcc': 1.1, 'tauMag': 0}, 'errors': [], 'type': 1, 'par1': True},
+    }
+else:
+    test_filters = { # 9DOF
+    'vqf': {'filter': {'tauAcc': 0.5, 'tauMag': 0.5}, 'errors': [], 'type': 1, 'par1': False},
+    'justa_cpp': {'filter': {'tauAcc': 2.92, 'tauMag': 1.54}, 'errors': [], 'type': 1, 'par1': True},
+    }
 
 single_dataset = len(test_datasets)==1
 
@@ -42,10 +51,16 @@ for dataset_name, dat in test_datasets.items():
             gyr = np.ascontiguousarray(dat['gyroscope'], dtype=np.float64)
             acc = np.ascontiguousarray(dat['accelerometer'], dtype=np.float64)
             mag = np.ascontiguousarray(dat['magnetometer'], dtype=np.float64)
-            vq = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=0.85, tauMag=1.66, motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False)
-            #vq.coeffs['gyrTs'] = 1.0/dat['mean_sampling_rate']            
-            res = vq.updateBatch(gyr, acc, mag)
-            result = res['quat9D']
+            vq = PyVQF(1.0/dat['mean_sampling_rate'], 
+                       tauAcc=filter['filter']['tauAcc'], tauMag=filter['filter']['tauMag'],
+                       motionBiasEstEnabled=True, restBiasEstEnabled=True, magDistRejectionEnabled=False,
+                       useAccStepWhole= filter['par1'])
+            if DOF6:
+                res = vq.updateBatch(gyr, acc)
+                result = res['quat6D']
+            else:
+                res = vq.updateBatch(gyr, acc, mag)
+                result = res['quat9D']
         else:
             filter['filter'].initFromAccMag(dat['accelerometer'][0], dat['magnetometer'][0])
             result = eval_filter_on_dataset(filter['filter'], dat)

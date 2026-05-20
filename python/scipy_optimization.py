@@ -1,6 +1,11 @@
 import pickle
 import numpy as np
 from scipy.optimize import minimize, differential_evolution
+import sys
+sys.path.append('python\\vqf_local\\vqf')  # folder containing vqf.pyx and vqf.pyxbld
+import pyximport
+pyximport.install(setup_args={"include_dirs": []}, language_level=3)
+
 from vqf import VQF as PyVQF
 # from vqf_local.vqf.pyvqf import PyVQF
 from dataset_loader import DatasetLoader
@@ -11,9 +16,9 @@ from utils import angle_error, eval_filter_on_dataset
 from matplotlib import pyplot as plt
 import pandas as pd
 
-SWITCH_VQF = False
+SWITCH_VQF = True
 RMSE = True
-DOF6=True
+DOF6=False
 
 # Define the objective function to minimize
 def objective_function(params, datasets):
@@ -62,7 +67,9 @@ def objective_function(params, datasets):
             if DOF6:
                 b = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=params[0], motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False)
             else:
-                b = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=params[0], tauMag=params[1], motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False)
+                b = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=params[0], tauMag=params[1], 
+                          motionBiasEstEnabled=True, restBiasEstEnabled=True, magDistRejectionEnabled=False,
+                            useAccStepWhole= False)
             
             if DOF6:
                 res = b.updateBatch(gyr, acc)
@@ -199,9 +206,9 @@ if __name__ == "__main__":
     sl = dataset_loader.load_justa_raw(0)
     fast = dataset_loader.load_justa_raw(1)
     dist = dataset_loader.load_justa_raw(2)
-    # test_datasets['j_slow'] = sl
-    # test_datasets['j_fast'] = fast
-    # test_datasets['j_dist'] = dist
+    test_datasets['j_slow'] = sl
+    test_datasets['j_fast'] = fast
+    test_datasets['j_dist'] = dist
     
     broad_white = dataset_loader.broad_white_list_datasets()
     for i in range(4):

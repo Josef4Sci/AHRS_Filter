@@ -4,5 +4,8 @@
     "workbench.list.horizontalScrolling": true,
     "workbench.editor.tabSizing": "shrink",
     "workbench.editor.wrapTabs": true,
-    "cmake.ignoreCMakeListsMissing": true
+    "cmake.ignoreCMakeListsMissing": true,
+    "files.associations": {
+        "*.pyx": "python"
+    }
 }
