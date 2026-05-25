@@ -47,6 +47,7 @@ class JustaAHRSPure:
         
     def initFromAccMag(self, accelerometer, magnetometer):
         self.quaternion = wahba_constrained(np.array([0, 0, 1]), accelerometer, np.array([0, 1, 0]), magnetometer)[0]
+        print(f"initFromAccMag python: {self.quaternion[0]} {self.quaternion[1]} {self.quaternion[2]} {self.quaternion[3]}")
         self.quaternion_1hist = self.quaternion_filt = self.quaternion.copy()
 
     @jit(nopython=True, cache=True, fastmath=True)
@@ -582,7 +583,8 @@ class JustaAHRSInvFast:
             magnetometer: Magnetometer measurement [mx, my, mz]
         """
         self.quaternion = wahba_constrained(np.array([0, 0, 1]), accelerometer, np.array([0, 1, 0]), magnetometer)[0]      
-
+        print(f"initFromAccMag python: {self.quaternion[0]} {self.quaternion[1]} {self.quaternion[2]} {self.quaternion[3]}")
+        
 
     def update(self, gyroscope, accelerometer, magnetometer, dt):
         """

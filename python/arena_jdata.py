@@ -25,7 +25,7 @@ datasets = [sl, fast, dist]
 
 test_datasets={'slow': sl} #, 'fast': fast, 'dist': dist
 
-plot_dataset(test_datasets['slow'])
+#plot_dataset(test_datasets['slow'])
 
 if DOF6:
     test_filters = { # 6DOF
@@ -35,7 +35,7 @@ if DOF6:
 else:
     test_filters = { # 9DOF
     'vqf': {'filter': {'tauAcc': 0.5, 'tauMag': 0.5}, 'errors': [], 'type': 1, 'par1': False},
-    'justa_cpp': {'filter': {'tauAcc': 2.92, 'tauMag': 1.54}, 'errors': [], 'type': 1, 'par1': True},
+    'justa_cpp': {'filter': {'tauAcc': 0.7, 'tauMag': 0.3}, 'errors': [], 'type': 1, 'par1': True},
     }
 
 single_dataset = len(test_datasets)==1
@@ -54,7 +54,8 @@ for dataset_name, dat in test_datasets.items():
             vq = PyVQF(1.0/dat['mean_sampling_rate'], 
                        tauAcc=filter['filter']['tauAcc'], tauMag=filter['filter']['tauMag'],
                        motionBiasEstEnabled=True, restBiasEstEnabled=True, magDistRejectionEnabled=False,
-                       useAccStepWhole= filter['par1'])
+                       useAccStepWhole= filter['par1'], useMag=True, useMagStepWhole=True, useMagStepLinear=True, 
+                       useJustaFilter=True, JustaFIlterVersionOld=True)
             if DOF6:
                 res = vq.updateBatch(gyr, acc)
                 result = res['quat6D']

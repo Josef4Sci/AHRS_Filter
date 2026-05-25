@@ -1,6 +1,11 @@
 from dataset_loader import DatasetLoader
 import matplotlib.pyplot as plt
 
+import sys
+sys.path.append('python\\vqf_local\\vqf')  # folder containing vqf.pyx and vqf.pyxbld
+import pyximport
+pyximport.install(setup_args={"include_dirs": []}, language_level=3)
+
 from vqf import VQF as PyVQF
 # from vqf_local.vqf.pyvqf import PyVQF
 import numpy as np
@@ -18,17 +23,15 @@ for i in range(1):
         # bias = dat['gyroscope'][:500].mean(axis=0)
         # dat['gyroscope']=dat['gyroscope']*np.array([1.015, 1.015, 1.01]) - bias
         test_datasets[n+str(i)] = dat
+    
+    
+single_test = 'fast_v4.mat0'    
+test_datasets= {single_test: test_datasets[single_test]} # only first dataset
 
-
-
-test_filters = {
-    'JustaAHRSPure': {'filter': JustaAHRSPure(w_acc=0.99, w_mag=0.99), 'errors': [], 'type': 0},
-    'JustaAHRSPureMagLin': {'filter': JustaAHRSPure(w_acc=0.6, w_mag=80.15, linMag=True), 'errors': [], 'type': 0},
-    'JustaAHRSlp2': {'filter': JustaAHRSlp2(w_acc=0.6, w_mag=1.0, linMag=False, whole_mag=False), 'errors': [], 'type': 0},
-    'JustaAHRSlp2wholeMag': {'filter': JustaAHRSlp2(w_acc=0.6, w_mag=1.0, linMag=False, whole_mag=True), 'errors': [], 'type': 0},
-    'JustaAHRSlp2lin': {'filter': JustaAHRSlp2(w_acc=0.6, w_mag=1.15, linMag=True), 'errors': [], 'type': 0},
-    'JustaAHRSlp2linWhole': {'filter': JustaAHRSlp2(w_acc=0.6, w_mag=1.15, linMag=True, whole_mag=True), 'errors': [], 'type': 0},
-    'vqf': {'filter': None, 'errors': [], 'type': 1},
+test_filters = { # 9DOF
+    'vqf': {'filter': {'tauAcc': 1.2, 'tauMag': 7.0}, 'errors': [], 'type': 1, 'justa': False},
+    'justa_cpp': {'filter': {'tauAcc': 1.5, 'tauMag': 1.3}, 'errors': [], 'type': 1, 'justa': True},
+    #'justa_inv':  {'filter': JustaAHRSInvFast(w_acc=1, w_mag=1), 'errors': [], 'type': 0},
 }
 
 single_dataset = len(test_datasets)==1
@@ -44,7 +47,10 @@ for dataset_name, dat in test_datasets.items():
             gyr = np.ascontiguousarray(dat['gyroscope'], dtype=np.float64)
             acc = np.ascontiguousarray(dat['accelerometer'], dtype=np.float64)
             mag = np.ascontiguousarray(dat['magnetometer'], dtype=np.float64)
-            vq = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=0.85, tauMag=1.66, motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False)
+            vq = PyVQF(1.0/dat['mean_sampling_rate'], 
+                       tauAcc=filter['filter']['tauAcc'], tauMag=filter['filter']['tauMag'],
+                       motionBiasEstEnabled=True, restBiasEstEnabled=True, magDistRejectionEnabled=False,
+                       useJustaFilter=filter['justa'], staticAccThreshold=0.9, staticGyrThreshold=0.5, staticMagThreshold=3.0, staticWindowSize=3, staticBlockForwardSteps=500) #useMag=True, useMagStepWhole=False, useMagStepLinear=True, useJustaFilter=filter['justa'], JustaFIlterVersionOld=True
             #vq.coeffs['gyrTs'] = 1.0/dat['mean_sampling_rate']            
             res = vq.updateBatch(gyr, acc, mag)
             result = res['quat9D']

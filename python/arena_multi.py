@@ -48,7 +48,7 @@ if DOF6:
     test_filters = { # 6DOF
         # 'JustaAHRSpureLin': {'filter': JustaAHRSPure(w_acc=0.43, no_mag=True), 'errors': [], 'type': 0},   
         # 'JustaAHRSinv': {'filter': JustaAHRSInvFast(w_acc=0.392, no_mag=True), 'errors': [], 'type': 0},
-        'vqf': {'filter': {'tauAcc': 1.1, 'tauMag': 3.6}, 'errors': [], 'type': 1},
+        'vqf': {'filter': {'tauAcc': 1.2, 'tauMag': 7.0}, 'errors': [], 'type': 1},
         'justa_cpp': {'filter': None, 'errors': [], 'type': 1, 'par1': True},
     }
 else:
@@ -57,8 +57,8 @@ else:
     #'JustaAHRSpure': {'filter': JustaAHRSPure(w_acc=0.52, w_mag=0.52, linMag=False, whole_mag=False), 'errors': [], 'type': 0},    
     #'JustaAHRSlp2lin+': {'filter': JustaAHRSlp2(w_acc=0.89, w_mag=0.49, linMag=True, whole_mag=False), 'errors': [], 'type': 0},
     #'vqf': {'filter': {'tauAcc': 1.1, 'tauMag': 3.6}, 'errors': [], 'type': 1},
-    'vqf': {'filter': {'tauAcc': 1, 'tauMag': 7.26}, 'errors': [], 'type': 1, 'par1': False},
-    'justa_cpp': {'filter': {'tauAcc': 0.7, 'tauMag': 0.3}, 'errors': [], 'type': 1, 'par1': True},
+    'vqf': {'filter': {'tauAcc': 0.880710, 'tauMag': 3.11}, 'errors': [], 'type': 1, 'par1': False},
+    'justa_cpp': {'filter': {'tauAcc': 2.0, 'tauMag': 1.35}, 'errors': [], 'type': 1, 'par1': True},
     }
     
 single_dataset = len(test_datasets)==1
@@ -99,7 +99,7 @@ for dataset_name, dataset in test_datasets.items():
             vq = PyVQF(1.0/dat['mean_sampling_rate'], 
                        tauAcc=j_filter['filter']['tauAcc'], tauMag=j_filter['filter']['tauMag'],
                        motionBiasEstEnabled=True, restBiasEstEnabled=True, magDistRejectionEnabled=False,
-                       useAccStepWhole= j_filter['par1'])
+                       useJustaFilter= j_filter['par1'], staticAccThreshold=0.9, staticGyrThreshold=0.5, staticMagThreshold=3.0, staticWindowSize=3, staticBlockForwardSteps=500)
             if DOF6:
                 res = vq.updateBatch(gyr, acc)
                 result = res['quat6D']

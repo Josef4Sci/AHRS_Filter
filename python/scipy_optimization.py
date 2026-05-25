@@ -1,4 +1,5 @@
 import pickle
+import time
 import numpy as np
 from scipy.optimize import minimize, differential_evolution
 import sys
@@ -34,6 +35,7 @@ def objective_function(params, datasets):
     N = params.shape[0]
     
     err = 0.0
+    time_start = time.time()
     for dataset in datasets:
 
         shift = 0
@@ -64,12 +66,11 @@ def objective_function(params, datasets):
             gyr = np.ascontiguousarray(dat['gyroscope'], dtype=np.float64)
             acc = np.ascontiguousarray(dat['accelerometer'], dtype=np.float64)
             mag = np.ascontiguousarray(dat['magnetometer'], dtype=np.float64)
-            if DOF6:
-                b = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=params[0], motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False)
-            else:
-                b = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=params[0], tauMag=params[1], 
-                          motionBiasEstEnabled=True, restBiasEstEnabled=True, magDistRejectionEnabled=False,
-                            useAccStepWhole= False)
+            
+            useMag = not DOF6
+            b = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=params[0], tauMag=params[1], 
+                        motionBiasEstEnabled=True, restBiasEstEnabled=True, magDistRejectionEnabled=False,
+                        useJustaFilter=True, staticAccThreshold=0.9, staticGyrThreshold=0.5, staticMagThreshold=3.0, staticWindowSize=3, staticBlockForwardSteps=500) #, useMagStepLinear=False, useJustaFilter=True, JustaFIlterVersionOld=False
             
             if DOF6:
                 res = b.updateBatch(gyr, acc)
@@ -95,9 +96,10 @@ def objective_function(params, datasets):
             mean_error = np.mean(angle_err)
         err += mean_error
     
+    time_end = time.time()
     for i in range(N):
         print(f"s{i+1}={params[i]:.6f}", end=' ')
-    print(f"-> mean_error={(err/len(datasets)):.6f}")
+    print(f"-> mean_error={(err/len(datasets)):.6f}, time={(time_end-time_start):.3f}s")
     
     return err
     
@@ -130,7 +132,7 @@ def turbo_bo_optimize(datasets):
     if DOF6:
         pbounds = {"low_band": (0.0), "up_band": (10.0)}
     else:
-        pbounds = {"low_band": (0.0, 0.0), "up_band": (10.0,10.0)}
+        pbounds = {"low_band": (0.0, 0.0), "up_band": (10.0,15.0)}
 
     turbo_bo = TuRBO_BO(
         f=objective_function,
