@@ -50,10 +50,11 @@ class LP4(CascadeLP):
 # if __name__ == "__main__":
 #     # Example usage
 #     lp2 = LP2(alpha=0.1, y0=0.5)
-#     lp4 = LP4(alpha=0.1, y0=0.5)
+#     lp4 = LP4(alpha=0.99, y0=0.5)
 #     inter = OnePoleLP(alpha=0.1, y=0.5)
 
-#     samples = [0, 1, 0, 1, 0, 1]  # toy signal
+#     samples_pattern = [0, 1]  # toy signal
+#     samples = samples_pattern * 20  # repeat to see the effect
 #     print("LP2:", [lp2.update(x) for x in samples])
 #     print("LP4:", [lp4.update(x) for x in samples])
 #     print("inter:", [inter.update(x) for x in samples])
