@@ -311,6 +311,136 @@ class JustaAHRSlp2:
         self.linMag = linMag
         self.whole_mag = whole_mag
         
+        self.counter = 0 
+        
+        order=2
+        fs = 100  # Sample frequency (Hz)
+        cutoff = 0.02  # Cutoff frequency (Hz)
+        nyquist = fs / 2
+        normalized_cutoff = w_acc 
+        
+        # Get filter coefficients
+        self.b, self.a = signal.butter(order, normalized_cutoff, btype='low')
+
+        self.acc_cor_lowpass = self.acc_ref.copy()
+        self.zi = signal.lfilter_zi(self.b, self.a)[:, None] * np.ones(3) * 0.00001
+        
+    def updateLowPass(self, acc_cor):
+        a, self.zi = signal.lfilter(self.b, self.a, acc_cor[np.newaxis, :], axis=0, zi=self.zi)
+        self.acc_cor_lowpass = a[0]
+        return self.acc_cor_lowpass
+        
+        
+    def initFromAccMag(self, accelerometer, magnetometer):
+        self.quaternion = wahba_constrained(np.array([0, 0, 1]), accelerometer, np.array([0, 1, 0]), magnetometer)[0]
+        self.quaternion_gyr = self.quaternion.copy()
+        self.quaternion_gyr_to_earth = np.array([0.0, 0.0, 0.0, 1.0])
+        
+        init_x, init_y, init_z = accelerometer[0], accelerometer[1], accelerometer[2]
+        if self.lp_stage == 1:
+            self.low_pass_3 = [LP1(alpha=self.w_acc, y0=init_x), LP1(alpha=self.w_acc, y0=init_y), LP1(alpha=self.w_acc, y0=init_z)]
+        elif self.lp_stage == 2:
+            self.low_pass_3 = [LP2(alpha=self.w_acc, y0=init_x), LP2(alpha=self.w_acc, y0=init_y), LP2(alpha=self.w_acc, y0=init_z)]
+        else:
+            self.low_pass_3 = [LP4(alpha=self.w_acc, y0=init_x), LP4(alpha=self.w_acc, y0=init_y), LP4(alpha=self.w_acc, y0=init_z)]
+            
+            
+    def lp2_vec(self, acc, norm=False):
+        acc_x_lp = self.low_pass_3[0].update(acc[0])
+        acc_y_lp = self.low_pass_3[1].update(acc[1])
+        acc_z_lp = self.low_pass_3[2].update(acc[2])
+        if norm:
+            acc_out, val = fast_normalize_3d(np.array([acc_x_lp, acc_y_lp, acc_z_lp], dtype=np.float64))
+        else:
+            acc_out = np.array([acc_x_lp, acc_y_lp, acc_z_lp], dtype=np.float64)
+        return acc_out
+        
+
+    def update(self, gyroscope, accelerometer, magnetometer, dt):
+        
+        acc, valid_a = fast_normalize_3d(accelerometer)    
+        if not valid_a:
+            return    
+        mag, valid_m = fast_normalize_3d(magnetometer)
+        if not valid_m:
+            return
+        
+        self.counter += 1
+        #if self.counter < 20:
+            
+        
+        self.quaternion_gyr = integrate_midpoint(self.quaternion_gyr, gyroscope, dt)
+        self.quaternion_gyr = fast_normalize_4d(self.quaternion_gyr)
+
+        inv = quatern_conj_single(self.quaternion_gyr)
+        acc_mes_pred_gyr = quaternion_rotate_vector(inv, acc)
+        #lp2_vec = self.lp2_vec(acc_mes_pred_gyr)
+        lp2_vec = self.updateLowPass(acc_mes_pred_gyr)
+        
+        a = quaternion_rotate_vector(self.quaternion_gyr_to_earth, lp2_vec)
+        
+        self.coefs.append(list(lp2_vec.copy())) #+list(a.copy())
+        comp = np.array([1.0, 0.5*a[1], -0.5*a[0], 0.0])
+
+        self.quaternion_gyr_to_earth = quatern_prod_single(self.quaternion_gyr_to_earth, comp)
+        self.quaternion_gyr_to_earth = fast_normalize_4d(self.quaternion_gyr_to_earth)
+        
+        #x part rotation from quat_inv
+        # Accelerometer correction
+        #ca = fast_cross(acc_mes_pred_gyr, self.acc_ref)
+        
+        # qp = quatern_prod_single(self.quaternion_gyr_to_earth, self.quaternion_gyr)
+        
+        # rot_x = np.array([  2*(0.5 - qp[2]**2 - qp[3]**2),
+        #                     2*(qp[1]*qp[2] - qp[0]*qp[3]),
+        #                     2*(qp[0]*qp[2] + qp[1]*qp[3]) ])
+        # mag_pr_x = np.dot(rot_x, mag)
+        # mstep = self.w_mag * dt * 0.0215351
+        # m_step_dir =-mstep if mag_pr_x > 0 else mstep       
+        
+        # # Correction quaternion
+        # q_cor = np.array([1, 0, 0, m_step_dir])
+        
+        # self.quaternion_gyr_to_earth = quatern_prod_single(q_cor,  self.quaternion_gyr_to_earth)
+        
+        quat = quatern_prod_single(self.quaternion_gyr_to_earth, self.quaternion_gyr)
+        if quat[0] < 0:
+            quat = -quat
+            
+        self.quaternion = fast_normalize_4d(quat)
+        
+class JustaAHRSlp3:
+
+    """
+    Justa AHRS v2
+    1. get weighted quaternion from last particle history
+    2. calculate diff quaternion for each last particle history 
+    3. apply diff to first quaternion in history and use as start for prediction
+    4. predict each particle and store history
+    5. repeat    
+    """
+    
+    def __init__(self, quaternion=None, w_acc=0.00248, w_mag=1.35e-04, w_step=0.1, linMag=False, whole_mag=False, lp_stage=2):
+        
+        self.quaternion = np.array([1.0, 0.0, 0.0, 0.0]) if quaternion is None else np.array(quaternion)
+        self.quaternion_gyr = self.quaternion.copy()
+        self.quaternion_gyr_to_earth = self.quaternion.copy()
+        self.weights_static = np.array([0, 1.0])
+        self.no_mag = False
+        
+        self.defacc = 0.9791458
+        self.coefs = []
+        self.bias_gyro = np.zeros(3, dtype=np.float64)
+        self.acc_ref = np.array([0.0, 0.0, 1.0])
+        self.lp_stage = lp_stage
+        self.w_mag = w_mag
+        self.w_acc = w_acc
+        self.w_step = w_step
+        
+        self.linMag = linMag
+        self.whole_mag = whole_mag
+        self.sum_ca = np.zeros(3, dtype=np.float64)
+        
         
     def initFromAccMag(self, accelerometer, magnetometer):
         self.quaternion = wahba_constrained(np.array([0, 0, 1]), accelerometer, np.array([0, 1, 0]), magnetometer)[0]
@@ -346,12 +476,50 @@ class JustaAHRSlp2:
         if not valid_m:
             return
         
-        self.quaternion_gyr = integrate_midpoint(self.quaternion_gyr, gyroscope, dt)
-        self.quaternion_gyr = fast_normalize_4d(self.quaternion_gyr)
+       
+        qp = integrate_midpoint(self.quaternion, gyroscope, dt)
 
+        inv_pr = quatern_conj_single(qp)
+        acc_mes_pred = quaternion_rotate_vector(inv_pr, acc)
+        
+        if self.no_mag:
+            m_step_dir = 0.0
+        else:
+            #x part rotation from quat_inv
+            rot_x = np.array([  2*(0.5 - qp[2]**2 - qp[3]**2),
+                                2*(qp[1]*qp[2] - qp[0]*qp[3]),
+                                2*(qp[0]*qp[2] + qp[1]*qp[3]) ])
+            
+            mag_pr_x = np.dot(rot_x, mag)
+
+            mstep = self.w_mag * dt * 0.0215351
+            m_step_dir =-mstep if mag_pr_x < 0 else mstep            
+        
+        # Accelerometer correction
+        ca = fast_cross(acc_mes_pred, self.acc_ref)
+        
+        lp2_vec = self.lp2_vec(self.sum_ca)
+        self.sum_ca += ca
+        
+        na = np.linalg.norm(ca)
+        veca = ca / na
+        veca *= (self.w_acc * dt * 0.103143448)
+        
+        #magnetic correction [0 1 0] reference -> mag_mes_pred[0] < 0
+        veca[2] += m_step_dir
+        
+        # Correction quaternion
+        q_cor = np.array([1, *(veca)])
+        
+        quat = quatern_prod_single(q_cor, qp)
+        
+        if quat[0] < 0:
+            quat = -quat
+            
+        self.quaternion = fast_normalize_4d(quat)
+        
         inv = quatern_conj_single(self.quaternion_gyr)
         acc_mes_pred_gyr = quaternion_rotate_vector(inv, acc)
-        lp2_vec = self.lp2_vec(acc_mes_pred_gyr)
         
         a = quaternion_rotate_vector(self.quaternion_gyr_to_earth, lp2_vec)
         

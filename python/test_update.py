@@ -7,7 +7,19 @@ from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSPure, JustaAHRSInvButt
 from utils import angle_error, eval_filter_on_dataset, plot_dataset, qdiff, angle_diff_deg
 import pickle
 from quaternion_library import quatern_prod, quatern_conj
-plot_result = True
+
+
+import sys
+sys.path.append('python\\vqf_local\\vqf')  # folder containing vqf.pyx and vqf.pyxbld
+
+import pyximport
+pyximport.install(setup_args={"include_dirs": []}, language_level=3)
+
+from pyvqf import PyVQF
+
+DOF6 = True
+
+VQF = False
 
 dl = DatasetLoader()
 # dataset_name = 'slow_v4.mat'
@@ -16,21 +28,39 @@ dl = DatasetLoader()
 test_datasets = {}
 dl = DatasetLoader()
 dat = dl.load_broad_dataset(file_name='07_undisturbed_fast_rotation_B.mat', mean_initial_samples=True)
+start_index = dat['start_time']['index'] if dat.keys().__contains__('start_time') else 2000
+bias = dat['gyroscope'][:start_index].mean(axis=0)
+dat['gyroscope'] = dat['gyroscope'] - bias
 
-#dat = dl.load_justa_raw(1)
+if VQF:
+    b = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=0.994, tauMag=1.44, motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False)
+        
+    gyr = np.ascontiguousarray(dat['gyroscope'], dtype=np.float64)
+    acc = np.ascontiguousarray(dat['accelerometer'], dtype=np.float64)
+    mag = np.ascontiguousarray(dat['magnetometer'], dtype=np.float64)
+    res = b.updateBatch(gyr, acc, mag)
+    quaternion_result = res['quat6D']
+else:
+    #j_filter = JustaAHRSInvButterworth()
+    j_filter = JustaAHRSlp2(w_acc=0.000122, w_mag=0.0, linMag=True, lp_stage=4)
+    #j_filter = JustaAHRSPure(w_acc=0.2, w_mag=0.2)
 
-j_filter = JustaAHRSInvButterworth()
-j_filter = JustaAHRSlp2(w_acc=0.01, w_mag=0.9, linMag=True)
-# j_filter = JustaAHRSPure(w_acc=0.2, w_mag=0.2)
+    j_filter.initFromAccMag(dat['accelerometer'][0], dat['magnetometer'][0]) 
 
-j_filter.initFromAccMag(dat['accelerometer'][0], dat['magnetometer'][0]) 
-
-
-quaternion_result = eval_filter_on_dataset(j_filter, dat)
-diff = angle_error(quaternion_result, dat['reference'], align_start=True, shift_samples=0, align_index=200)
+    quaternion_result = eval_filter_on_dataset(j_filter, dat)
+    
+diff = angle_error(quaternion_result, dat['reference'], align_start=True, shift_samples=0, align_index=3000, use_imu=DOF6)
 print(f"Mean angle error: {np.mean(diff):.4f} deg")
 
+#noise
+quaternion_result_noise = np.abs(np.diff(diff, axis=0))
+print(f"Mean quaternion change: {quaternion_result_noise.mean():.6f}")
+
+
 plt.plot(diff, label='Reference Norm')
-plt.plot(j_filter.coefs, label=[f"coef {i}" for i in range(len(j_filter.coefs[0]))])
+
+if not VQF:
+    plt.plot(j_filter.coefs, label=[f"coef {i}" for i in range(len(j_filter.coefs[0]))])
+    # plt.plot(np.array(j_filter.coefs)[:,:], label=[f"coef {i}" for i in range(3)])
 plt.legend()
 plt.show()

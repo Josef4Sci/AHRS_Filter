@@ -17,9 +17,9 @@ from utils import angle_error, eval_filter_on_dataset
 from matplotlib import pyplot as plt
 import pandas as pd
 
-SWITCH_VQF = True
-RMSE = True
-DOF6=False
+SWITCH_VQF = False
+RMSE = False
+DOF6=True
 
 time_measuements = []
 
@@ -70,8 +70,8 @@ def objective_function(params, datasets):
             mag = np.ascontiguousarray(dat['magnetometer'], dtype=np.float64)
             
             useMag = not DOF6
-            b = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=params[0], tauMag=params[1], 
-                        motionBiasEstEnabled=True, restBiasEstEnabled=True, magDistRejectionEnabled=False,
+            b = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=params[0], tauMag=0.0, 
+                        motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False,
                         useJustaFilter=False, useAccLp=False,
                         staticAccThreshold=0.9, staticGyrThreshold=0.5, staticMagThreshold=3.0, staticWindowSize=3, staticBlockForwardSteps=500) #, useMagStepLinear=False, useJustaFilter=True, JustaFIlterVersionOld=False
             
@@ -82,9 +82,10 @@ def objective_function(params, datasets):
                 res = b.updateBatch(gyr, acc, mag)
                 quaternion_result = res['quat9D']
         else:
+            
             filter_instance = JustaAHRSInvFast(w_acc=params[0], w_mag=1.0)
             #filter_instance = JustaAHRSPure(w_acc=params[0], w_mag=params[1] if not DOF6 else None, linMag=False, whole_mag=False, no_mag=DOF6)
-            #filter_instance = JustaAHRSlp2(w_acc=params[0], w_mag=1.0, w_step=params[1], lp_stage=4)
+            filter_instance = JustaAHRSlp2(w_acc=params[0], w_mag=0.0, linMag=True, lp_stage=4)
             
             filter_instance.initFromAccMag(dat['accelerometer'][0], dat['magnetometer'][0]) # Initialize with first measurement
             quaternion_result = eval_filter_on_dataset(filter_instance, dat, use_imu=False, use_square_err=False)
@@ -134,7 +135,7 @@ def turbo_bo_optimize(datasets):
     
     # pbounds = {"low_band": (0.01, 0.01, 0.01, 0.01), "up_band": (0.4,0.4,0.4,0.4)}
     if DOF6:
-        pbounds = {"low_band": (0.0), "up_band": (10.0)}
+        pbounds = {"low_band": (0.0), "up_band": (0.1)}
     else:
         pbounds = {"low_band": (0.0, 0.0), "up_band": (10.0,10.0)}
 
@@ -234,6 +235,7 @@ if __name__ == "__main__":
 
     datasets = list(test_datasets.values())
 
+    datasets = [dataset_loader.load_broad_dataset(file_name='07_undisturbed_fast_rotation_B.mat', mean_initial_samples=True)]
     #dataset = pickle.load( open('synthetic_rigid_body_sensor_offset.pkl', 'rb') )#  
 
     # dataset = dataset_loader.load_sassari_dataset('medium_v4.mat', 0)
