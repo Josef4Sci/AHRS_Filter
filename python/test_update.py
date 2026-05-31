@@ -34,12 +34,12 @@ dat['gyroscope'] = dat['gyroscope'] - bias
 
 if VQF:
     b = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=0.994, tauMag=1.44, motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False)
-        
+    b.qut
     gyr = np.ascontiguousarray(dat['gyroscope'], dtype=np.float64)
     acc = np.ascontiguousarray(dat['accelerometer'], dtype=np.float64)
     mag = np.ascontiguousarray(dat['magnetometer'], dtype=np.float64)
     res = b.updateBatch(gyr, acc, mag)
-    quaternion_result = res['quat6D']
+    quaternion_result = res['quat3D']
 else:
     #j_filter = JustaAHRSInvButterworth()
     j_filter = JustaAHRSlp2(w_acc=0.000122, w_mag=0.0, linMag=True, lp_stage=4)
@@ -59,8 +59,8 @@ print(f"Mean quaternion change: {quaternion_result_noise.mean():.6f}")
 
 plt.plot(diff, label='Reference Norm')
 
-if not VQF:
-    plt.plot(j_filter.coefs, label=[f"coef {i}" for i in range(len(j_filter.coefs[0]))])
-    # plt.plot(np.array(j_filter.coefs)[:,:], label=[f"coef {i}" for i in range(3)])
+# if not VQF:
+#     plt.plot(j_filter.coefs, label=[f"coef {i}" for i in range(len(j_filter.coefs[0]))])
+#     # plt.plot(np.array(j_filter.coefs)[:,:], label=[f"coef {i}" for i in range(3)])
 plt.legend()
 plt.show()

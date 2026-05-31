@@ -8,15 +8,19 @@ Magnetometer, and Gyroscope Combination with Separated Sensor Corrections.
 Sensors, 2020, 20.14: 3824.
 """
 
+import math
+
 from scipy import signal
 import numpy as np
 import sys
 import os
 from numba import jit
 
-from cascade_low_pass import LP1, LP2, LP4
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+from cascade_low_pass import LP1, LP2, LP4
 from utils import wahba_constrained, interpolate_with_scipy
 from quaternion_library_jit import fast_cross, integrate_midpoint, integrate_rk4, quaternion_rotate_vector
 from quaternion_library_jit import quaternion_rotate_vector, quatern_prod_single, fast_normalize_3d, fast_normalize_4d, quatern_conj_single, integrate_euler
@@ -321,11 +325,17 @@ class JustaAHRSlp2:
         
         # Get filter coefficients
         self.b, self.a = signal.butter(order, normalized_cutoff, btype='low')
-
+        self.init_acc = np.array([0.0, 0.0, 0.0])
+        self.init_phase = 20
         self.acc_cor_lowpass = self.acc_ref.copy()
         self.zi = signal.lfilter_zi(self.b, self.a)[:, None] * np.ones(3) * 0.00001
         
     def updateLowPass(self, acc_cor):
+        if self.init_phase > 0:
+            self.init_acc += acc_cor
+            self.init_phase -= 1
+            return self.init_acc / (20 - self.init_phase)
+        
         a, self.zi = signal.lfilter(self.b, self.a, acc_cor[np.newaxis, :], axis=0, zi=self.zi)
         self.acc_cor_lowpass = a[0]
         return self.acc_cor_lowpass
@@ -369,21 +379,35 @@ class JustaAHRSlp2:
         #if self.counter < 20:
             
         
-        self.quaternion_gyr = integrate_midpoint(self.quaternion_gyr, gyroscope, dt)
+        self.quaternion_gyr = integrate_midpoint(self.quaternion_gyr, gyroscope, dt)    
         self.quaternion_gyr = fast_normalize_4d(self.quaternion_gyr)
+        # self.quaternion = self.quaternion_gyr
+        # return
 
-        inv = quatern_conj_single(self.quaternion_gyr)
-        acc_mes_pred_gyr = quaternion_rotate_vector(inv, acc)
+        acc_mes_pred_gyr = quaternion_rotate_vector(self.quaternion_gyr, acc)
         #lp2_vec = self.lp2_vec(acc_mes_pred_gyr)
-        lp2_vec = self.updateLowPass(acc_mes_pred_gyr)
-        
-        a = quaternion_rotate_vector(self.quaternion_gyr_to_earth, lp2_vec)
-        
-        self.coefs.append(list(lp2_vec.copy())) #+list(a.copy())
-        comp = np.array([1.0, 0.5*a[1], -0.5*a[0], 0.0])
+        accEarthIn = self.updateLowPass(acc_mes_pred_gyr)
 
-        self.quaternion_gyr_to_earth = quatern_prod_single(self.quaternion_gyr_to_earth, comp)
-        self.quaternion_gyr_to_earth = fast_normalize_4d(self.quaternion_gyr_to_earth)
+        accEarth = quaternion_rotate_vector(self.quaternion_gyr_to_earth, accEarthIn)
+
+        accEarth, valid_accEarth = fast_normalize_3d(accEarth)
+
+        q_w = math.sqrt((accEarth[2]+1)/2)
+        if q_w > 1e-6:
+            accCorrQuat = np.array([q_w, 0.5*accEarth[1]/q_w, -0.5*accEarth[0]/q_w, 0], float)
+        else:
+            accCorrQuat = np.array([0, 1, 0, 0], float)
+
+        
+        self.quaternion_gyr_to_earth = quatern_prod_single(accCorrQuat, self.quaternion_gyr_to_earth)
+
+        a = quaternion_rotate_vector(self.quaternion_gyr_to_earth, accEarth)
+        
+        #self.coefs.append(list(lp2_vec.copy())) #+list(a.copy())
+        #comp = np.array([1.0, 0.5*a[1], -0.5*a[0], 0.0])
+
+        # self.quaternion_gyr_to_earth = quatern_prod_single(comp, self.quaternion_gyr_to_earth)
+        # self.quaternion_gyr_to_earth = fast_normalize_4d(self.quaternion_gyr_to_earth)
         
         #x part rotation from quat_inv
         # Accelerometer correction

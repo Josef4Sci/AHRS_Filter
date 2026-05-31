@@ -111,8 +111,28 @@ def integrate_rk4(q, gyro, dt):
     
     return q_new
 
+#@jit(nopython=True, cache=True)
+def quaternion_rotate_vector(q: np.ndarray, v: np.ndarray) -> np.ndarray:
+    r"""Rotates a vector with a given quaternion.
+
+    :math:`\begin{bmatrix}0 & \mathbf{v}_\mathrm{out}\end{bmatrix}
+    = \mathbf{q} \otimes \begin{bmatrix}0 & \mathbf{v}\end{bmatrix} \otimes \mathbf{q}^*`
+
+    :param q: input quaternion -- numpy array with shape (4,)
+    :param v: input vector -- numpy array with shape (3,)
+    :return: output vector -- numpy array with shape (3,)
+    """
+    assert q.shape == (4,)
+    assert v.shape == (3,)
+    q0, q1, q2, q3 = q.tolist()
+    v0, v1, v2 = v.tolist()
+    x = (1 - 2*q2*q2 - 2*q3*q3)*v0 + 2*v1*(q2*q1 - q0*q3) + 2*v2*(q0*q2 + q3*q1)
+    y = 2*v0*(q0*q3 + q2*q1) + v1*(1 - 2*q1*q1 - 2*q3*q3) + 2*v2*(q2*q3 - q1*q0)
+    z = 2*v0*(q3*q1 - q0*q2) + 2*v1*(q0*q1 + q3*q2) + v2*(1 - 2*q1*q1 - 2*q2*q2)
+    return np.array([x, y, z], float)
+
 @jit(nopython=True, cache=True)
-def quaternion_rotate_vector(q, v):
+def quaternion_rotate_vector_muj(q, v):
     """
     Rotate vector v by quaternion q.
     
