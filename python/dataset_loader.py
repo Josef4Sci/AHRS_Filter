@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import os
 import scipy.io
+import matplotlib.pyplot as plt
 from quaternion_library import quatern_prod, quatern_conj
 from preprocess_data.load_raw_justa import fix_coordinate_system, fix_magnet_alignment,\
     get_measurement_files, load_raw_justa, interpolate_vicon_to_imu, add_time_from_start, fix_negative_qw,\
@@ -119,8 +120,8 @@ class DatasetLoader:
         mag = unit_raw[:,7:10]
         # quat_local = unit_raw[:,10:14]
 
-        dt = np.mean(np.diff(raw_time))
-        sr = 1/dt
+        dt = np.mean(np.diff(raw_time)) # the time values seems inaccurate
+        sr = 100
         valid_data = ~np.isnan(smoth_time)
 
         data = {

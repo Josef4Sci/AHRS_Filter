@@ -10,16 +10,16 @@ pyximport.install(setup_args={"include_dirs": []}, language_level=3)
 from vqf import VQF as PyVQF
 # from vqf_local.vqf.pyvqf import PyVQF
 from dataset_loader import DatasetLoader
-from filters import (JustaAHRSlp2, JustaAHRSInvFast, JustaAHRSPure, JustaAHRSv3)
+from filters import (JustaAHRSInvFast, JustaAHRSPure, JustaAHRSv3)
 
 from turbo_data import TuRBO_BO
 from utils import angle_error, eval_filter_on_dataset
 from matplotlib import pyplot as plt
 import pandas as pd
 
-SWITCH_VQF = False
-RMSE = False
-DOF6=True
+SWITCH_VQF = True
+RMSE = True
+DOF6=False
 
 time_measuements = []
 
@@ -37,7 +37,6 @@ def objective_function(params, datasets):
     N = params.shape[0]
     
     err = 0.0
-    time_start = time.time()
     for dataset in datasets:
 
         shift = 0
@@ -58,6 +57,7 @@ def objective_function(params, datasets):
         
         alignIndex = int(start_index*0.5)
         
+        time_all = 0
         
         dat = dataset.copy()
         bias = dat['gyroscope'][:start_index].mean(axis=0)
@@ -69,23 +69,21 @@ def objective_function(params, datasets):
             acc = np.ascontiguousarray(dat['accelerometer'], dtype=np.float64)
             mag = np.ascontiguousarray(dat['magnetometer'], dtype=np.float64)
             
-            useMag = not DOF6
-            b = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=params[0], tauMag=0.0, 
+            b = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=params[0], tauMag=params[1], 
                         motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False,
-                        useJustaFilter=False, useAccLp=False,
-                        staticAccThreshold=0.9, staticGyrThreshold=0.5, staticMagThreshold=3.0, staticWindowSize=3, staticBlockForwardSteps=500) #, useMagStepLinear=False, useJustaFilter=True, JustaFIlterVersionOld=False
+                        useJustaFilter=False)
             
             if DOF6:
                 res = b.updateBatch(gyr, acc)
                 quaternion_result = res['quat6D']
             else:
-                res = b.updateBatch(gyr, acc, mag)
+                res = b.updateBatch(gyr, acc, mag)     
                 quaternion_result = res['quat9D']
         else:
             
             filter_instance = JustaAHRSInvFast(w_acc=params[0], w_mag=1.0)
             #filter_instance = JustaAHRSPure(w_acc=params[0], w_mag=params[1] if not DOF6 else None, linMag=False, whole_mag=False, no_mag=DOF6)
-            filter_instance = JustaAHRSlp2(w_acc=params[0], w_mag=0.0, linMag=True, lp_stage=4)
+            # filter_instance = JustaAHRSlp2(w_acc=params[0], w_mag=0.0, linMag=True, lp_stage=4)
             
             filter_instance.initFromAccMag(dat['accelerometer'][0], dat['magnetometer'][0]) # Initialize with first measurement
             quaternion_result = eval_filter_on_dataset(filter_instance, dat, use_imu=False, use_square_err=False)
@@ -100,11 +98,10 @@ def objective_function(params, datasets):
             mean_error = np.mean(angle_err)
         err += mean_error
     
-    time_end = time.time()
-    time_measuements.append(time_end-time_start)
+    time_measuements.append(time_all)
     for i in range(N):
         print(f"s{i+1}={params[i]:.6f}", end=' ')
-    print(f"-> mean_error={(err/len(datasets)):.6f}, time={(time_end-time_start):.3f}s")
+    print(f"-> mean_error={(err/len(datasets)):.6f}")
     
     return err
     
@@ -229,13 +226,13 @@ if __name__ == "__main__":
     for i in range(1):
         for n in names:    
             dat = dataset_loader.load_sassari_dataset(n, i)
-            # bias = dat['gyroscope'][:500].mean(axis=0)
-            # dat['gyroscope']=dat['gyroscope']*np.array([1.015, 1.015, 1.01]) - bias
+            bias = dat['gyroscope'][:500].mean(axis=0)
+            dat['gyroscope']=dat['gyroscope']*np.array([1.015, 1.015, 1.01]) - bias
             test_datasets[n+str(i)] = dat
 
     datasets = list(test_datasets.values())
 
-    datasets = [dataset_loader.load_broad_dataset(file_name='07_undisturbed_fast_rotation_B.mat', mean_initial_samples=True)]
+    #datasets = [dataset_loader.load_broad_dataset(file_name='07_undisturbed_fast_rotation_B.mat', mean_initial_samples=True)]
     #dataset = pickle.load( open('synthetic_rigid_body_sensor_offset.pkl', 'rb') )#  
 
     # dataset = dataset_loader.load_sassari_dataset('medium_v4.mat', 0)

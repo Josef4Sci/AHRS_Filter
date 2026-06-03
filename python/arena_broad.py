@@ -12,18 +12,26 @@ from vqf import VQF
 
 import numpy as np
 import pandas as pd
-from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure, JustaAHRSlp2
+from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure
 from utils import angle_error, eval_filter_on_dataset, plot_dataset
 
 test_datasets = {}
 dl = DatasetLoader()
+
+RMSE = True
+FIX_BIAS = True
         
 broad_white = dl.broad_white_list_datasets()
-#for i in range(4):
-file = broad_white[0]
-dat = dl.load_broad_dataset(file_name=file, mean_initial_samples=True)
-if dat is not None:
-    test_datasets[file] = dat
+for i in range(4):
+    file = broad_white[i]
+    dat = dl.load_broad_dataset(file_name=file, mean_initial_samples=True)
+    if dat is not None:
+        test_datasets[file] = dat
+
+# file = broad_white[1]
+# dat = dl.load_broad_dataset(file_name=file, mean_initial_samples=True)
+# if dat is not None:
+#     test_datasets[file] = dat
 
 # black_list = dl.black_list_error_jump
 # ind = 14
@@ -48,8 +56,8 @@ if dat is not None:
 #test_datasets[ '07_undisturbed_fast_rotation_B.mat'] = dl.load_broad_dataset(file_name='07_undisturbed_fast_rotation_B.mat', mean_initial_samples=True)
 
 test_filters = { # 9DOF
-'vqf': {'filter': {'tauAcc': 1.2, 'tauMag': 7.0}, 'errors': [], 'type': 1, 'justa': False},
-'justa_cpp': {'filter': {'tauAcc': 1.7, 'tauMag': 1.5}, 'errors': [], 'type': 1, 'justa': True},
+'vqf': {'filter': {'tauAcc': 1.258081, 'tauMag': 9.9}, 'errors': [], 'type': 1, 'justa': False},
+'justa_cpp': {'filter': {'tauAcc': 2.295586, 'tauMag': 0.046651}, 'errors': [], 'type': 1, 'justa': True},
 }
 single_dataset = len(test_datasets)==1
 
@@ -58,33 +66,44 @@ errors_filters = dict.fromkeys(test_filters.keys(), [])
 for dataset_name, dat in test_datasets.items():
     print(f"Evaluating dataset: {dataset_name}")
 
+    dat_cp = dat.copy()
+    bias = dat_cp['gyroscope'][:dat_cp['start_time']['index']].mean(axis=0)
+    dat_cp['gyroscope'] = dat_cp['gyroscope'] - bias
+    
     for filter_name, j_filter in test_filters.items():       
         if j_filter['type'] == 1:  # vqf
-            # j_filter['filter'].
-            gyr = np.ascontiguousarray(dat['gyroscope'], dtype=np.float64)
-            acc = np.ascontiguousarray(dat['accelerometer'], dtype=np.float64)
-            mag = np.ascontiguousarray(dat['magnetometer'], dtype=np.float64)
+            
+            gyr = np.ascontiguousarray(dat_cp['gyroscope'], dtype=np.float64)
+            acc = np.ascontiguousarray(dat_cp['accelerometer'], dtype=np.float64)
+            mag = np.ascontiguousarray(dat_cp['magnetometer'], dtype=np.float64)
             start_time = time.time()
-            vq = VQF(1.0/dat['mean_sampling_rate'], tauAcc=j_filter['filter']['tauAcc'], tauMag=j_filter['filter']['tauMag'], motionBiasEstEnabled=True, restBiasEstEnabled=True,
-                     magDistRejectionEnabled=False, useJustaFilter=j_filter['justa'], staticAccThreshold=0.9, staticGyrThreshold=0.5, staticMagThreshold=3.0, staticWindowSize=3, staticBlockForwardSteps=500)
+            vq = VQF(1.0/dat_cp['mean_sampling_rate'], tauAcc=j_filter['filter']['tauAcc'], tauMag=j_filter['filter']['tauMag'],
+                     motionBiasEstEnabled=False, restBiasEstEnabled=False,
+                     magDistRejectionEnabled=False, useJustaFilter=j_filter['justa'])
                       
             res = vq.updateBatch(gyr, acc, mag)
             result = res['quat9D']
         else:
-            j_filter['filter'].initFromAccMag(dat['accelerometer'][0], dat['magnetometer'][0])
-            result = eval_filter_on_dataset(j_filter['filter'], dat)
+            j_filter['filter'].initFromAccMag(dat_cp['accelerometer'][0], dat_cp['magnetometer'][0])
+            result = eval_filter_on_dataset(j_filter['filter'], dat_cp['gyroscope'], dat_cp['accelerometer'], dat_cp['magnetometer'], dat_cp['mean_sampling_rate'])
         
-        alignIndex = int(dat['start_time']['index']*0.5)
-        error_9D = angle_error(result, dat['reference'], align_start=True, shift_samples=0, align_index=alignIndex)
+        alignIndex = int(dat_cp['start_time']['index']*0.5)
+        error_timeserie = angle_error(result, dat_cp['reference'], align_start=True, shift_samples=0, align_index=alignIndex)
         
-        print(f"{filter_name} Mean Error: {np.nanmean(error_9D):.2f} deg")
-        if single_dataset:
-            j_filter['errors'].append(error_9D)
+        
+        if RMSE:
+            error = np.sqrt(np.nanmean(error_timeserie**2))
         else:
-            j_filter['errors'].append(np.nanmean(error_9D))
+            error = np.nanmean(error_timeserie)
+            
+        print(f"{filter_name} Mean Error: {error:.2f} deg")
+        if single_dataset:
+            j_filter['errors'].append(error_timeserie)
+        else:
+            j_filter['errors'].append(error)
 
 if single_dataset:
-    plt.figure()
+    #plt.figure()
     
     fig, axs = plt.subplots(4, 1, sharex=True, constrained_layout=True)
     

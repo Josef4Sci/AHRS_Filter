@@ -9,7 +9,7 @@ from vqf import VQF as PyVQF
 # from vqf_local.vqf.pyvqf import PyVQF
 import numpy as np
 import pandas as pd
-from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure, JustaAHRSlp2
+from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv
 from utils import angle_error, eval_filter_on_dataset, plot_dataset
 
 
@@ -23,7 +23,7 @@ fast = dataset_loader.load_justa_raw(1)
 dist = dataset_loader.load_justa_raw(2)
 datasets = [sl, fast, dist]
 
-test_datasets={'slow': sl} #, 'fast': fast, 'dist': dist
+test_datasets={'slow': sl, 'fast': fast, 'dist': dist} #
 
 #plot_dataset(test_datasets['slow'])
 
@@ -34,8 +34,8 @@ if DOF6:
     }
 else:
     test_filters = { # 9DOF
-    'vqf': {'filter': {'tauAcc': 0.5, 'tauMag': 0.5}, 'errors': [], 'type': 1, 'par1': False},
-    'justa_cpp': {'filter': {'tauAcc': 0.7, 'tauMag': 0.3}, 'errors': [], 'type': 1, 'par1': True},
+    'vqf': {'filter': {'tauAcc': 0.824504, 'tauMag': 4.68}, 'errors': [], 'type': 1, 'par1': False},
+    'justa_cpp': {'filter': {'tauAcc': 0.78, 'tauMag': 0.38}, 'errors': [], 'type': 1, 'par1': True},
     }
 
 single_dataset = len(test_datasets)==1
@@ -54,8 +54,7 @@ for dataset_name, dat in test_datasets.items():
             vq = PyVQF(1.0/dat['mean_sampling_rate'], 
                        tauAcc=filter['filter']['tauAcc'], tauMag=filter['filter']['tauMag'],
                        motionBiasEstEnabled=True, restBiasEstEnabled=True, magDistRejectionEnabled=False,
-                       useAccStepWhole= filter['par1'], useMag=True, useMagStepWhole=True, useMagStepLinear=True, 
-                       useJustaFilter=True, JustaFIlterVersionOld=True)
+                       useJustaFilter=filter['par1'])
             if DOF6:
                 res = vq.updateBatch(gyr, acc)
                 result = res['quat6D']
@@ -68,6 +67,9 @@ for dataset_name, dat in test_datasets.items():
         
         alignIndex = int(dat['start_time']['index']*0.5)
         error_9D = angle_error(result, dat['reference'], align_start=True, shift_samples=0, align_index=alignIndex)
+        
+        if RMSE:
+            error_9D = np.sqrt(np.mean(error_9D**2))
         
         print(f"{filter_name} Mean Error: {np.mean(error_9D):.2f} deg")
         if single_dataset:

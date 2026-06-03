@@ -111,6 +111,23 @@ def integrate_rk4(q, gyro, dt):
     
     return q_new
 
+def quatMultiply(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
+    r"""Performs quaternion multiplication (:math:`\mathbf{q}_\mathrm{out} = \mathbf{q}_1 \otimes \mathbf{q}_2`).
+
+    :param q1: input quaternion 1 -- numpy array with shape (4,)
+    :param q2: input quaternion 2 -- numpy array with shape (4,)
+    :return: output quaternion -- numpy array with shape (4,)
+    """
+    assert q1.shape == (4,)
+    assert q2.shape == (4,)
+    q10, q11, q12, q13 = q1.tolist()
+    q20, q21, q22, q23 = q2.tolist()
+    w = q10 * q20 - q11 * q21 - q12 * q22 - q13 * q23
+    x = q10 * q21 + q11 * q20 + q12 * q23 - q13 * q22
+    y = q10 * q22 - q11 * q23 + q12 * q20 + q13 * q21
+    z = q10 * q23 + q11 * q22 - q12 * q21 + q13 * q20
+    return np.array([w, x, y, z], float)
+
 #@jit(nopython=True, cache=True)
 def quaternion_rotate_vector(q: np.ndarray, v: np.ndarray) -> np.ndarray:
     r"""Rotates a vector with a given quaternion.

@@ -10,7 +10,7 @@ pyximport.install(setup_args={"include_dirs": []}, language_level=3)
 from vqf import VQF as PyVQF
 import numpy as np
 import pandas as pd
-from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure, JustaAHRSlp2
+from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure
 from utils import angle_error, eval_filter_on_dataset
 
 RMSE = True
@@ -57,8 +57,8 @@ else:
     #'JustaAHRSpure': {'filter': JustaAHRSPure(w_acc=0.52, w_mag=0.52, linMag=False, whole_mag=False), 'errors': [], 'type': 0},    
     #'JustaAHRSlp2lin+': {'filter': JustaAHRSlp2(w_acc=0.89, w_mag=0.49, linMag=True, whole_mag=False), 'errors': [], 'type': 0},
     #'vqf': {'filter': {'tauAcc': 1.1, 'tauMag': 3.6}, 'errors': [], 'type': 1},
-    'vqf': {'filter': {'tauAcc': 0.880710, 'tauMag': 3.11}, 'errors': [], 'type': 1, 'par1': False},
-    'justa_cpp': {'filter': {'tauAcc': 2.0, 'tauMag': 1.35}, 'errors': [], 'type': 1, 'par1': True},
+    'vqf': {'filter': {'tauAcc': 0.96332, 'tauMag': 6.47}, 'errors': [], 'type': 1, 'par1': False},
+    'justa_cpp': {'filter': {'tauAcc': 1.882, 'tauMag': 0.23}, 'errors': [], 'type': 1, 'par1': True},
     }
     
 single_dataset = len(test_datasets)==1
@@ -98,8 +98,8 @@ for dataset_name, dataset in test_datasets.items():
             start_time = time.time()
             vq = PyVQF(1.0/dat['mean_sampling_rate'], 
                        tauAcc=j_filter['filter']['tauAcc'], tauMag=j_filter['filter']['tauMag'],
-                       motionBiasEstEnabled=True, restBiasEstEnabled=True, magDistRejectionEnabled=False,
-                       useJustaFilter= j_filter['par1'], staticAccThreshold=0.9, staticGyrThreshold=0.5, staticMagThreshold=3.0, staticWindowSize=3, staticBlockForwardSteps=500)
+                       motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False,
+                       useJustaFilter= j_filter['par1'])
             if DOF6:
                 res = vq.updateBatch(gyr, acc)
                 result = res['quat6D']
