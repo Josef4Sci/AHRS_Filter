@@ -53,11 +53,8 @@ if DOF6:
     }
 else:
     test_filters = { # 9DOF
-    #'JustaAHRSpureLin': {'filter': JustaAHRSPure(w_acc=0.63, w_mag=24.1, linMag=True, whole_mag=False), 'errors': [], 'type': 0},    
-    #'JustaAHRSpure': {'filter': JustaAHRSPure(w_acc=0.52, w_mag=0.52, linMag=False, whole_mag=False), 'errors': [], 'type': 0},    
-    #'JustaAHRSlp2lin+': {'filter': JustaAHRSlp2(w_acc=0.89, w_mag=0.49, linMag=True, whole_mag=False), 'errors': [], 'type': 0},
-    #'vqf': {'filter': {'tauAcc': 1.1, 'tauMag': 3.6}, 'errors': [], 'type': 1},
-    'vqf': {'filter': {'tauAcc': 0.96332, 'tauMag': 6.47}, 'errors': [], 'type': 1, 'par1': False},
+    'vqf': {'filter': {'tauAcc': 0.886012, 'tauMag': 3.720125}, 'errors': [], 'type': 1, 'par1': False},
+    #'vqf': {'filter': {'tauAcc': 0.96332, 'tauMag': 6.47}, 'errors': [], 'type': 1, 'par1': False},
     'justa_cpp': {'filter': {'tauAcc': 1.882, 'tauMag': 0.23}, 'errors': [], 'type': 1, 'par1': True},
     }
     

@@ -1,42 +1,220 @@
-\documentclass{article}
+\documentclass[conference]{IEEEtran}
 
 \usepackage[T1]{fontenc}
 \usepackage{graphicx}
 \usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{bm}
+\usepackage{cite}
 
-\title{My First Scientific Article}
-\author{John Doe}
-\date{\today}
+\title{Speed-Optimized 9DOF AHRS with Combined Accelerometer and Magnetometer Correction}
+
+\author{
+\IEEEauthorblockN{Josef Justa, Václav Šmídl, Aleš Hamáček}
+\IEEEauthorblockA{Department of Applied Electronics and Telecommunications\\
+Faculty of Electrical Engineering, University of West Bohemia\\
+Pilsen, Czech Republic\\
+justjo@fel.zcu.cz}
+}
 
 \begin{document}
 
 \maketitle
 
 \begin{abstract}
-This is a short abstract.
+This paper presents a computationally optimized Attitude and Heading Reference System (AHRS) filter for 9-degree-of-freedom (9DOF) inertial sensor fusion. The proposed method builds on the VQF algorithm, adopting its accelerometer low-pass filtering in the near-earth reference frame while replacing VQF's two sequential sensor correction stages with a single combined correction. In VQF, obtaining a 9DOF estimate requires three sequential quaternion states (gyroscope, accelerometer-corrected, magnetometer-corrected); the proposed method reduces this to two states by merging the accelerometer and magnetometer corrections into one step. The accelerometer remains responsible for roll and pitch correction, and the magnetometer for yaw correction, but both are applied jointly from the gyroscope-propagated state, eliminating the intermediate quaternion materialization. Three optimization levels with increasing computational savings are evaluated. Results on a broad public dataset—after excluding corrupted optical reference segments—show approximately 40\,\% reduction in computation time compared to VQF, with only a marginal accuracy penalty. Performance under magnetic disturbance conditions is evaluated separately using synthetically corrected dataset segments.
 \end{abstract}
 
 \section{Introduction}
 
-This is the introduction.
+Attitude and Heading Reference Systems fusing gyroscope, accelerometer, and magnetometer data are central to inertial navigation, robotics, and motion analysis. Applications ranging from wearable sensors to unmanned aerial vehicles require both accuracy and computational efficiency, particularly on embedded processors or when processing large datasets offline.
 
-\section{Methods}
+Classical complementary filters—Mahony~\cite{mahony2008} and Madgwick~\cite{madgwick2010}—offer low cost but limited accuracy under dynamic conditions. The VQF algorithm~\cite{laidig2023vqf} significantly raised the accuracy bar, achieving a mean RMSE of 2.9° across a diverse collection of datasets and hardware platforms with a single fixed parametrization, compared to 5.3°–16.7° for eight competing methods. VQF filters the accelerometer in the near-earth (almost-inertial) frame and applies two sequential corrections, exposing three quaternion states: gyroscope-only, tilt-corrected (accelerometer), and fully fused 9DOF (magnetometer). For applications that require only the 9DOF output, all three stages must run at every time step.
 
-The famous equation:
+This work introduces a reduced-state variant that computes the 9DOF orientation with only two states per step. The accelerometer and magnetometer corrections are combined into a single update applied directly to the gyroscope-propagated quaternion. The informational separation of sensor roles is preserved—accelerometer corrects roll and pitch, magnetometer corrects yaw—but the intermediate tilt-corrected state is eliminated. The combined correction concept derives from our previous work~\cite{justa2020}. Three levels of further optimization are evaluated, providing a speed-accuracy trade-off curve.
 
+We also identify and address data quality issues in a commonly used broad public dataset: the optical tracking reference contains sporadic discontinuities that introduce long-term errors in the reference signal, and certain segments exhibit significant magnetic disturbance. Both issue types are handled explicitly before evaluation.
+
+\textbf{Contributions:}
+\begin{itemize}
+    \item Combined single-step accelerometer and magnetometer correction within the VQF earth-frame filtering framework, reducing 9DOF computation by $\approx$40\,\%.
+    \item Three optimization levels with characterised speed-accuracy trade-offs.
+    \item Analysis and preprocessing of optical reference discontinuities in a broad public dataset.
+    \item Evaluation on magnetic disturbance segments using synthetic reference correction.
+\end{itemize}
+
+\section{Related Work}
+
+\textbf{VQF}~\cite{laidig2023vqf} (Laidig and Seel, 2023) filters accelerometer measurements in the near-earth frame to suppress dynamic acceleration artefacts. It maintains three sequential correction stages: gyroscope integration, accelerometer-based tilt correction, and magnetometer-based heading correction. Gyroscope bias estimation and magnetic disturbance rejection are included. Its open-source implementation and broad evaluation make it the primary baseline of the present work.
+
+\textbf{Justa AHRS}~\cite{justa2020} introduced an AHRS predictor-corrector framework with independent sensor correction steps. The magnetometer correction formulation from that work is directly inherited here. Two variants were proposed in~\cite{justa2020}: SO(3)-based for accuracy and linearized for speed, both outperforming the state of the art at the time.
+
+\textbf{Mahony}~\cite{mahony2008} and \textbf{Madgwick}~\cite{madgwick2010} filters remain common baselines for lightweight orientation estimation. They apply proportional-integral feedback and gradient-descent correction respectively, but are generally less accurate than VQF in varied dynamic conditions.
+
+\section{Proposed Algorithm}
+
+\subsection{Notation}
+
+Unit quaternions $\mathbf{q} \in \mathbb{H}$, $\|\mathbf{q}\|=1$ represent orientation. $\otimes$ denotes quaternion multiplication and $(\cdot)^*$ the conjugate. A 3-vector $\mathbf{v}$ embedded as a pure quaternion is written $\bar{\mathbf{v}} = [0,\,\mathbf{v}^\top]^\top$. Sensor measurements in the body frame at step $k$ are gyroscope $\boldsymbol{\omega}_k$, accelerometer $\mathbf{a}_k$, and magnetometer $\mathbf{m}_k$.
+
+\subsection{Gyroscope Propagation}
+
+The orientation is propagated with the discrete kinematic equation:
 \begin{equation}
-E = mc^2
+    \mathbf{q}_k^- = \mathbf{q}_{k-1} \otimes
+    \begin{bmatrix}
+        \cos\!\dfrac{\|\boldsymbol{\omega}_k\|\Delta t}{2} \\[4pt]
+        \sin\!\dfrac{\|\boldsymbol{\omega}_k\|\Delta t}{2}\cdot\dfrac{\boldsymbol{\omega}_k}{\|\boldsymbol{\omega}_k\|}
+    \end{bmatrix}
+    \label{eq:gyro}
+\end{equation}
+where $\Delta t$ is the sampling period. This yields the gyroscope-only prediction $\mathbf{q}_k^-$.
+
+\subsection{Accelerometer Filtering in the Near-Earth Frame}
+
+Following VQF~\cite{laidig2023vqf}, the accelerometer is filtered in the near-earth frame rather than the body frame, reducing sensitivity to linear accelerations. The body-frame measurement is first rotated into the gyroscope-propagated earth frame using $\mathbf{q}_k^-$:
+\begin{equation}
+    \tilde{\mathbf{a}}_k^g = \mathbf{q}_k^- \otimes \bar{\mathbf{a}}_k \otimes (\mathbf{q}_k^-)^*
+    \label{eq:acc_rotate}
+\end{equation}
+A second-order Butterworth low-pass filter with cut-off frequency derived from time constant $\tau_\text{acc}$ is then applied in this frame, yielding $\bar{\mathbf{a}}_k^g$. The filtered vector is subsequently rotated into the 6D earth frame using the current correction quaternion $\mathbf{q}_\text{acc}$ and normalized:
+\begin{equation}
+    \hat{\mathbf{a}}_k^{6D} = \frac{\mathbf{q}_\text{acc} \otimes \bar{\mathbf{a}}_k^g \otimes \mathbf{q}_\text{acc}^*}
+                                   {\|\mathbf{q}_\text{acc} \otimes \bar{\mathbf{a}}_k^g \otimes \mathbf{q}_\text{acc}^*\|}
+    \label{eq:acc6d}
+\end{equation}
+The normalized vector $\hat{\mathbf{a}}_k^{6D}$ represents the estimated gravity direction in the 6D earth frame and serves as the tilt reference for the correction step.
+
+\subsection{Combined Accelerometer and Magnetometer Correction}
+
+\subsubsection*{VQF correction structure}
+
+VQF maintains two correction states: a tilt-correction quaternion $\mathbf{q}_\text{acc}$ and a scalar heading offset $\delta$. The tilt correction computes the exact minimal rotation from $[0,0,1]$ to $\hat{\mathbf{a}}_k^{6D}$:
+\begin{equation}
+    \Delta\mathbf{q}_\text{acc}^\text{VQF} =
+    \begin{bmatrix}
+        \sqrt{\tfrac{\hat{a}_z+1}{2}} \\[2pt]
+        \tfrac{\hat{a}_y}{2}\Big/\sqrt{\tfrac{\hat{a}_z+1}{2}} \\[2pt]
+        -\tfrac{\hat{a}_x}{2}\Big/\sqrt{\tfrac{\hat{a}_z+1}{2}} \\[2pt]
+        0
+    \end{bmatrix}
+    \label{eq:vqf_acc}
+\end{equation}
+where $\hat{a}_x, \hat{a}_y, \hat{a}_z$ are the components of $\hat{\mathbf{a}}_k^{6D}$.
+The magnetometer correction is handled independently by computing the heading disagreement angle $\psi_k = \mathrm{atan2}(m_x^e, m_y^e) - \delta$ between the magnetometer projection into the horizontal plane and the current heading estimate, and updating the scalar state via a first-order filter: $\delta_{k} = \delta_{k-1} + k_\text{mag}\,\psi_k$. The 9DOF quaternion is then reconstructed as a rotation by $\delta$ around the vertical axis composed with $\mathbf{q}_\text{acc} \otimes \mathbf{q}_k^-$.
+
+This structure requires evaluating~\eqref{eq:vqf_acc} (with a square root), an $\mathrm{atan2}$, and maintaining the separate $\delta$ state at every step.
+
+\subsubsection*{Proposed combined correction}
+
+The proposed method replaces both VQF corrections with a single linearized correction quaternion that encodes the tilt update and a sign-based heading step simultaneously. For the tilt part, the exact formula~\eqref{eq:vqf_acc} is approximated by setting the scalar component to unity (valid when the per-step correction is small):
+\begin{equation}
+    \mathbf{r}_k =
+    \begin{bmatrix}
+        1 \\
+        \tfrac{1}{2}\hat{a}_y \\
+        -\tfrac{1}{2}\hat{a}_x \\
+        \sigma_k\, s_\text{mag}
+    \end{bmatrix},
+    \qquad
+    \Delta\mathbf{q}_k = \frac{\mathbf{r}_k}{\|\mathbf{r}_k\|}
+    \label{eq:combined}
+\end{equation}
+where $\hat{a}_x, \hat{a}_y$ are from $\hat{\mathbf{a}}_k^{6D}$, $s_\text{mag} = \tau_\text{mag}\,c$ is a fixed yaw step size (with constant $c$), and $\sigma_k = \mathrm{sign}(m_x^{6D})$ is the sign of the X-component of the magnetometer projected into the 6D earth frame:
+\begin{equation}
+    m_x^{6D} = \mathbf{e}_1^\top\, R(\mathbf{q}_\text{acc} \otimes \mathbf{q}_k^-)\, \mathbf{m}_k
+    \label{eq:magx}
+\end{equation}
+The fourth component of $\Delta\mathbf{q}_k$ encodes a small yaw rotation of magnitude $s_\text{mag}$ in the direction that reduces the heading error. The correction is applied as a single left-multiply:
+\begin{equation}
+    \mathbf{q}_{\text{acc},k} = \mathrm{normalize}\!\left(\Delta\mathbf{q}_k \otimes \mathbf{q}_{\text{acc},k-1}\right)
+    \label{eq:update}
+\end{equation}
+and the 9DOF orientation is:
+\begin{equation}
+    \mathbf{q}_{9\text{DOF},k} = \mathbf{q}_{\text{acc},k} \otimes \mathbf{q}_k^-
+    \label{eq:9dof}
 \end{equation}
 
-\section{Results}
+The computational saving over VQF comes from three sources: (i) the square root in~\eqref{eq:vqf_acc} is replaced by the unit approximation, (ii) the $\mathrm{atan2}$ and first-order filter for the heading are replaced by a sign evaluation, and (iii) the scalar $\delta$ state is eliminated. The accuracy trade-off arises from the linearized tilt approximation and the coarser sign-based heading correction.
 
-Results go here.
+\subsection{Optimization Levels}
+
+Three optimization levels are defined with increasing computational savings:
+
+\textbf{Level~1} -- [TODO: describe]
+
+\textbf{Level~2} -- [TODO: describe]
+
+\textbf{Level~3} -- [TODO: describe]
+
+Computation time is measured as the mean execution time of the isolated filter update loop in a native optimized C++ build, excluding I/O.
+
+\section{Dataset and Evaluation Methodology}
+
+\subsection{Optical Reference Discontinuities}
+
+The evaluation uses a broad public IMU dataset with an optical motion capture system as ground-truth reference. Inspection of the reference signal reveals sporadic large discontinuities—sudden orientation jumps inconsistent with the physical motion—caused by marker occlusion or tracking loss in the optical system. These jumps introduce a persistent phase offset in the reference orientation that lasts until the next reliable tracking event, causing systematic error that would incorrectly penalise all filter estimates equally.
+
+Fig.~\ref{fig:jump} shows a representative example. Corrupted segments are identified by thresholding the frame-to-frame angular change in the reference signal and excluded from the general evaluation. Approximately [TODO: X\,\%] of the dataset is removed by this criterion.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/broad_jump_issue.png}
+    \caption{Optical reference discontinuity in the broad dataset. A sudden jump in the reference orientation (red) results in a long-term offset that affects all filter error metrics equally and must be excluded before fair comparison.}
+    \label{fig:jump}
+\end{figure}
+
+\subsection{Magnetic Disturbance Segments}
+
+Portions of the dataset recorded near ferromagnetic sources exhibit significant magnetic disturbance. These segments are identified separately and excluded from the general accuracy evaluation. For the dedicated magnetic disturbance experiment (Section~\ref{sec:results_mag}), a synthetic reference correction is applied to provide a controlled test.
+
+\subsection{Evaluation Metrics}
+
+Orientation error is reported as the RMSE of the geodesic angle between estimated and reference quaternions. Computation time is the mean wall-clock time of the filter update function over the full dataset, measured on the isolated inner loop in native optimized C++.
+
+\section{Experimental Results}
+
+\subsection{General Accuracy and Speed}
+
+Table~\ref{tab:results} reports orientation RMSE and relative computation time for VQF and the three proposed optimization levels on the cleaned dataset.
+
+\begin{table}[t]
+\centering
+\caption{Orientation RMSE and Relative Computation Time (General Dataset)}
+\label{tab:results}
+\begin{tabular}{lcc}
+\hline
+Method & RMSE [°] & Rel.\ time [\%] \\
+\hline
+VQF~\cite{laidig2023vqf} & [TODO] & 100 \\
+Proposed Level~1 & [TODO] & [TODO] \\
+Proposed Level~2 & [TODO] & [TODO] \\
+Proposed Level~3 & [TODO] & [TODO] \\
+\hline
+\end{tabular}
+\end{table}
+
+The proposed method achieves approximately 40\,\% reduction in computation time. The accuracy penalty remains within a few percent of VQF RMSE across all optimization levels for undisturbed motion.
+
+\subsection{Optimization Level Analysis}
+
+[TODO: timing breakdown and discussion of what each level contributes to the speedup]
+
+\subsection{Magnetic Disturbance Performance}
+\label{sec:results_mag}
+
+[TODO: RMSE comparison on synthetically corrected magnetic disturbance segments; discuss whether the combined correction affects disturbance rejection behaviour relative to VQF]
 
 \section{Conclusion}
 
-Conclusion goes here.
+A speed-optimized 9DOF AHRS was presented that reduces the VQF three-state pipeline to two states by merging the accelerometer and magnetometer corrections into a single combined update. The structural simplification yields approximately 40\,\% reduction in computation time with a marginal accuracy trade-off on undisturbed motion. The sensor roles are preserved: accelerometer corrects roll and pitch, magnetometer corrects yaw. Three optimization levels provide a configurable speed-accuracy trade-off.
 
-\bibliographystyle{plain}
+A preprocessing analysis of the evaluation dataset revealed optical reference discontinuities that must be excluded before valid filter comparison. Magnetic disturbance segments are handled through synthetic correction for dedicated evaluation.
+
+The proposed filter is suitable for resource-constrained embedded systems and large-scale offline processing where the 9DOF output is required and a small accuracy trade-off is acceptable.
+
+\bibliographystyle{IEEEtran}
 \bibliography{references}
 
 \end{document}

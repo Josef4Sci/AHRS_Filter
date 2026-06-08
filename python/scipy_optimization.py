@@ -114,7 +114,7 @@ def optimize_nelder_mead(datasets):
         initial_guess = [1, 1.0]
     else:
         initial_guess = [0.0004, 1.35e-04]  # Starting from your current values
-        initial_guess = [1, 100]
+        initial_guess = [1, 1]
     #
     
     result = minimize(
@@ -122,7 +122,7 @@ def optimize_nelder_mead(datasets):
         initial_guess,
         args=(datasets,),        
         method='Nelder-Mead',
-        options={'maxiter': 50, 'xatol': 1e-6, 'fatol': 1e-6, 'disp': True}
+        options={'maxiter': 1000, 'xatol': 1e-6, 'fatol': 1e-6, 'disp': True}
         #bounds=[(0, 1.0), (0, 1.0), (0.0, 1.0)]
     )
     
@@ -207,12 +207,12 @@ if __name__ == "__main__":
     
     test_datasets = {}
     
-    sl = dataset_loader.load_justa_raw(0)
-    fast = dataset_loader.load_justa_raw(1)
-    dist = dataset_loader.load_justa_raw(2)
-    test_datasets['j_slow'] = sl
-    test_datasets['j_fast'] = fast
-    test_datasets['j_dist'] = dist
+    # sl = dataset_loader.load_justa_raw(0)
+    # fast = dataset_loader.load_justa_raw(1)
+    # dist = dataset_loader.load_justa_raw(2)
+    # test_datasets['j_slow'] = sl
+    # test_datasets['j_fast'] = fast
+    # test_datasets['j_dist'] = dist
     
     broad_white = dataset_loader.broad_white_list_datasets()
     for i in range(4):
@@ -239,9 +239,9 @@ if __name__ == "__main__":
     # bias = dataset['gyroscope'][:500].mean(axis=0)
     # dataset['gyroscope']=dataset['gyroscope']*np.array([1.015, 1.015, 1.01]) - bias
     
-    # # Option 1: Fast local optimization (recommended to try first)
-    # print("\n### Method 1: Nelder-Mead (Local Optimization) ###")
-    # result = optimize_nelder_mead(datasets)
+    # Option 1: Fast local optimization (recommended to try first)
+    print("\n### Method 1: Nelder-Mead (Local Optimization) ###")
+    result = optimize_nelder_mead(datasets)
     
     # # Option 2: Bounded local optimization
     # print("\n### Method 2: L-BFGS-B (Bounded Optimization) ###")
@@ -252,8 +252,8 @@ if __name__ == "__main__":
     # result = optimize_differential_evolution()
     
     # Option 4: TuRBO Bayesian Optimization
-    print("\n### Method 4: TuRBO Bayesian Optimization ###")
-    result = turbo_bo_optimize(datasets)
+    # print("\n### Method 4: TuRBO Bayesian Optimization ###")
+    # result = turbo_bo_optimize(datasets)
     
     # mean time 
     print("\nAverage time per evaluation: {:.3f}s".format(np.mean(time_measuements)))

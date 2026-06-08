@@ -1,0 +1,92 @@
+RELATED WORK SUMMARY
+====================
+Folder: paper_j2/related_work/
+
+NOTE: Justa_sensors-20-03824.pdf is password-protected (copy restrictions).
+      VQF paper retrieved from arxiv.org/abs/2203.17024.
+
+-------------------------------------------------------------------------------
+FILE: vqf.pdf
+CITATION: Laidig D., Seel T. — "VQF: Highly Accurate IMU Orientation Estimation
+          with Bias Estimation and Magnetic Disturbance Rejection"
+          Information Fusion 91 (2023) 187–204
+          arXiv: 2203.17024
+-------------------------------------------------------------------------------
+The VQF algorithm is the direct baseline of the new method. Key characteristics:
+- 9DOF IMU orientation estimation (gyroscope + accelerometer + magnetometer)
+- Accelerometer low-pass filter applied in an "almost-inertial frame"
+  (near-earth/inertial frame, NOT the gyroscope/body frame)
+- Maintains three separate quaternion states: gyro-only, acc+gyro, acc+gyro+mag
+  — for 9DOF output all three correction stages must be computed sequentially
+  — this is the main computational cost the new paper targets
+- Includes gyroscope bias estimation and magnetic disturbance rejection
+- Evaluated with a single fixed parametrization across a large diverse dataset
+  collection (broad generalization without parameter tuning)
+- Compared against 8 literature methods; achieved RMSE 2.9° vs 5.3°–16.7°
+  for competing methods
+- Open-source implementation provided
+
+Relevance to new paper:
+- The acc low-pass filtering in the near-earth/inertial frame is adopted from VQF
+  (this is the "good approach from VQF" noted in the algorithm description)
+- VQF exposes three separate quaternion states (gyro / acc+gyro / acc+gyro+mag);
+  the new method collapses this to two states (gyro / gyro+acc+mag), where acc
+  corrects roll+pitch and mag corrects yaw within one combined correction step
+- This reduction from three sequential state corrections to one is the primary
+  source of the ~40% speedup
+- Informationally, acc and mag still correct separate axes in the new method —
+  the gain is structural (fewer state updates), not algorithmic fusion of axes
+- VQF is the primary speed and accuracy comparison baseline
+- Accuracy trade-off: few percent higher error vs VQF for undisturbed motion
+
+-------------------------------------------------------------------------------
+FILE: Justa_sensors-20-03824.pdf
+CITATION: Justa J., Šmídl V., Hamáček A. — "Fast AHRS Filter for Accelerometer,
+          Magnetometer, and Gyroscope Combination with Separated Sensor Corrections"
+          Sensors 20(14):3824, MDPI, 2020
+          DOI: 10.3390/s20143824
+          48 citations
+-------------------------------------------------------------------------------
+The author's previous paper introducing the Justa AHRS filter. Key contributions:
+- Predictor-corrector framework: prediction from gyroscopes + independent
+  correction steps for accelerometer and magnetometer separately
+- Two filter variants:
+    (a) SO(3)-based operations — maximum accuracy
+    (b) Linearized operations — faster computation
+- Both variants outperformed state-of-the-art in accuracy while requiring less
+  compute
+- Introduced the magnetometer correction step formulation that is carried into
+  the new paper
+- Validated with low-cost MEMS sensors and VICON optical tracking ground truth
+- Open datasets and source code published
+
+Relevance to new paper:
+- The magnetometer correction step formulation is inherited from this work
+- In both Justa AHRS and the new method, acc and mag corrections are
+  informationally separated: acc corrects roll/pitch, mag corrects yaw —
+  but they are applied in a single combined correction step (one state update)
+- Must be cited as the origin of the combined single-step correction
+- Positions the current paper as an optimization building on Justa AHRS +
+  VQF earth-frame filtering concepts
+
+-------------------------------------------------------------------------------
+FILE: naviconf26-cfp_web-04.pdf
+TOPIC: Call for Papers — IEEE Navigation Conference (NAVICON) 2026
+       Munich, Germany, December 9–11, 2026
+       Organized by IEEE Aerospace and Electronic Systems Society (AESS)
+-------------------------------------------------------------------------------
+Target conference for submission. NOT a related work paper.
+
+Key submission constraints:
+- Max 6 pages (IEEE format, figures and citations included)
+- Paper submission deadline: 15 June 2026
+- Acceptance notice: 15 September 2026
+- Final paper: 30 October 2026
+- Published in IEEE Xplore; best papers invited to IEEE Systems Magazine (AESS)
+- Relevant topic track: "Navigation sensors and data fusion"
+
+-------------------------------------------------------------------------------
+CITATION GAPS / TO DO
+-------------------------------------------------------------------------------
+- Consider citing Madgwick, Mahony, or EKF-based filters in related work section
+  for broader context (if page budget allows)

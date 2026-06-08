@@ -22,7 +22,7 @@ def load_raw_justa(vic_path, imu_path):
     acc_mult = 0.00098/16
     deg2rad = np.pi/180
     gyr_mult = deg2rad*2000/32767
-    mag_mult = 1/1000
+    mag_mult = -1/1000
 
     dat_imu['time'] = pd.to_datetime(dat_imu['time'], format='%Y/%m/%d/%H:%M:%S.%f')
     dat_imu['acc_x'] = dat_imu['acc_x'] * acc_mult
