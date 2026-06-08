@@ -18,15 +18,16 @@ from utils import angle_error, eval_filter_on_dataset, plot_dataset
 test_datasets = {}
 dl = DatasetLoader()
 
+DOF6 = True
 RMSE = True
 FIX_BIAS = True
         
-broad_white = dl.broad_white_list_datasets()
-for i in range(4):
-    file = broad_white[i]
-    dat = dl.load_broad_dataset(file_name=file, mean_initial_samples=True)
-    if dat is not None:
-        test_datasets[file] = dat
+# broad_white = dl.broad_white_list_datasets()
+# for i in range(4):
+#     file = broad_white[i]
+#     dat = dl.load_broad_dataset(file_name=file, mean_initial_samples=True)
+#     if dat is not None:
+#         test_datasets[file] = dat
 
 # file = broad_white[1]
 # dat = dl.load_broad_dataset(file_name=file, mean_initial_samples=True)
@@ -70,12 +71,14 @@ sys.exit()
 # dataset['reference'][diff_large] = np.NAN
 # test_datasets[file] = dataset
 
-#test_datasets['03_undisturbed_slow_rotation_C.mat'] = dl.load_broad_dataset(file_name='03_undisturbed_slow_rotation_C.mat', mean_initial_samples=True)
+#test_datasets['01_undisturbed_slow_rotation_A.mat'] = dl.load_broad_dataset(file_name='01_undisturbed_slow_rotation_A.mat', mean_initial_samples=True)
+# test_datasets['02_undisturbed_slow_rotation_B.mat'] = dl.load_broad_dataset(file_name='02_undisturbed_slow_rotation_B.mat', mean_initial_samples=True)
+# test_datasets['03_undisturbed_slow_rotation_C.mat'] = dl.load_broad_dataset(file_name='03_undisturbed_slow_rotation_C.mat', mean_initial_samples=True)
 #test_datasets[ '07_undisturbed_fast_rotation_B.mat'] = dl.load_broad_dataset(file_name='07_undisturbed_fast_rotation_B.mat', mean_initial_samples=True)
 
 test_filters = { # 9DOF
 'vqf': {'filter': {'tauAcc': 1.258081, 'tauMag': 9.9}, 'errors': [], 'type': 1, 'justa': False},
-'justa_cpp': {'filter': {'tauAcc': 2.295586, 'tauMag': 0.046651}, 'errors': [], 'type': 1, 'justa': True},
+#'justa_cpp': {'filter': {'tauAcc': 2.295586, 'tauMag': 0.046651}, 'errors': [], 'type': 1, 'justa': True},
 }
 single_dataset = len(test_datasets)==1
 
@@ -85,8 +88,9 @@ for dataset_name, dat in test_datasets.items():
     print(f"Evaluating dataset: {dataset_name}")
 
     dat_cp = dat.copy()
-    bias = dat_cp['gyroscope'][:dat_cp['start_time']['index']].mean(axis=0)
-    dat_cp['gyroscope'] = dat_cp['gyroscope'] - bias
+    if FIX_BIAS:
+        bias = dat_cp['gyroscope'][:dat_cp['start_time']['index']].mean(axis=0)
+        dat_cp['gyroscope'] = dat_cp['gyroscope'] - bias
     
     for filter_name, j_filter in test_filters.items():       
         if j_filter['type'] == 1:  # vqf
@@ -123,20 +127,31 @@ for dataset_name, dat in test_datasets.items():
 if single_dataset:
     #plt.figure()
     
-    fig, axs = plt.subplots(4, 1, sharex=True, constrained_layout=True)
+    fig, axs = plt.subplots(2, 1, sharex=True, constrained_layout=True)
     
+    fig.suptitle(f"Jumping reference issue example in Broad dataset {list(test_datasets.keys())[0]}")
+    fig.supxlabel('Time (s)')
+
     # interval = [22000, 24000]
     interval = [0, -1]
     for filter_name, j_filter in test_filters.items():
         # subplot errors and 
-        axs[0].plot(j_filter['errors'][0][interval[0]:interval[1]], label=filter_name)
+        axs[0].plot(dat['time'][interval[0]:interval[1]], j_filter['errors'][0][interval[0]:interval[1]], label='VQF error against reference')
+        axs[0].set_ylabel('Error (deg)')
+
+        
     axs[0].legend()
-    axs[1].plot(dat['gyroscope'][interval[0]:interval[1]])
-    axs[1].legend(['x','y','z'])
-    axs[2].plot(dat['accelerometer'][interval[0]:interval[1]])
-    axs[2].legend(['x','y','z'])
-    axs[3].plot(dat['magnetometer'][interval[0]:interval[1]])
-    axs[3].legend(['x','y','z'])
+    axs[1].plot(dat['time'][interval[0]:interval[1]-1], diff[interval[0]:interval[1]], label='angle difference between reference at t and t+1')
+    axs[1].set_ylabel('Diff angle (deg)')
+    axs[1].legend()    
+
+
+    # axs[1].plot(dat['gyroscope'][interval[0]:interval[1]])
+    # axs[1].legend(['x','y','z'])
+    # axs[2].plot(dat['accelerometer'][interval[0]:interval[1]])
+    # axs[2].legend(['x','y','z'])
+    # axs[3].plot(dat['magnetometer'][interval[0]:interval[1]])
+    # axs[3].legend(['x','y','z'])
     plt.show()
 else:
     for filter_name, j_filter in test_filters.items():

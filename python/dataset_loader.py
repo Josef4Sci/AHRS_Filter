@@ -8,7 +8,7 @@ import os
 import scipy.io
 import matplotlib.pyplot as plt
 from quaternion_library import quatern_prod, quatern_conj
-from preprocess_data.load_raw_justa import fix_coordinate_system, fix_magnet_alignment,\
+from load_raw_justa import fix_coordinate_system, fix_magnet_alignment,\
     get_measurement_files, load_raw_justa, interpolate_vicon_to_imu, add_time_from_start, fix_negative_qw,\
     fix_ref_drops
 

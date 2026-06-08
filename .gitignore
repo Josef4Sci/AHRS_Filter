@@ -1,3 +1,5 @@
 __pycache__/
 *.py[cod]
 *$py.class
+paper_j2/figures/*
+paper_j2/related_work/*

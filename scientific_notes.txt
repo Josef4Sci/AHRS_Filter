@@ -1,0 +1,59 @@
+SCIENTIFIC NOTES — AHRS Filter Paper
+=====================================
+
+PAPER CONSTRAINTS
+-----------------
+- Maximum 6 pages
+
+MAIN TOPIC
+----------
+Optimized VQF 9DOF algorithm for speed execution.
+The paper introduces 3 levels of optimization difficulty.
+New method is approximately 40% faster in compute and a few percent less accurate
+for general undisturbed use compared to baseline VQF.
+
+ALGORITHM DESCRIPTION
+---------------------
+- Good approach from VQF is used: Low-pass accelerometer filter applied in the near-earth frame (gyroscope frame)
+
+The new filter is based on the VQF algorithm with the following changes:
+- Magnetic correction and accelerometer correction are combined into one step
+  (this is faster than standard VQF which processes them separately)
+- The single-step magnetometer correction approach was introduced in the previous
+  paper: Justa AHRS
+
+PAPER SECTIONS
+--------------
+Intro:
+  - Introduction to AHRS filter and VQF algorithm
+
+1. Issues with optical reference in the broad dataset
+   - Optical reference contains jumps resulting in long-term errors
+   - Corrupted samples must be removed before general testing
+   - The magnetic disturbance portion is also corrupt — synthetic fix will be used
+     for that test instead
+
+2. General performance evaluation
+   - Use cleaned dataset (optical reference jumps removed)
+   - Compare speed and accuracy against baseline VQF
+
+3. Optimization difficulty evaluation
+  - difference base on time execution of native cpp build optimized code (separated update filters loop time)
+
+4. Performance on magnetic disturbance
+  - syntheticaly fixed broad dataset parts
+
+RESULTS INTERPRETATION
+----------------------
+- Speed improvement: ~40% faster compute
+- Accuracy trade-off: few percent loss in RMSE/angle error for undisturbed motion
+- Corrupted reference segments should be excluded from main accuracy metrics
+  and reported separately to explain dataset preprocessing decisions
+
+RELATED WORK
+------------
+- Folder: paper_j2/related_work
+
+FIGURES
+-------
+- Folder: paper_j2/figures

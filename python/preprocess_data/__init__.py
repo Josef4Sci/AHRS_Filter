@@ -1,4 +1,4 @@
-from .load_raw_justa import (
+from ..load_raw_justa import (
 	add_time_from_start,
 	fix_negative_qw,
 	get_measurement_files,
