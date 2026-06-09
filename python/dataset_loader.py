@@ -7,6 +7,7 @@ import numpy as np
 import os
 import scipy.io
 import matplotlib.pyplot as plt
+from utils import angle_error
 from quaternion_library import quatern_prod, quatern_conj
 from load_raw_justa import fix_coordinate_system, fix_magnet_alignment,\
     get_measurement_files, load_raw_justa, interpolate_vicon_to_imu, add_time_from_start, fix_negative_qw,\
@@ -24,8 +25,12 @@ class DatasetLoader:
         self.datasets = {}
         self.ms2g = 9.80665  # Conversion factor from m/s^2 to g
         self.black_list_error_jump = ['01_undisturbed_slow_rotation_A.mat', '04_undisturbed_slow_rotation_with_breaks_A.mat', '06_undisturbed_fast_rotation_A.mat', '08_undisturbed_fast_rotation_with_breaks_A.mat', '13_undisturbed_slow_translation_with_breaks_A.mat', '15_undisturbed_fast_translation_A.mat', '17_undisturbed_fast_translation_with_breaks_A.mat', '19_undisturbed_slow_combined_240s.mat', '20_undisturbed_slow_combined_360s.mat', '21_undisturbed_fast_combined.mat', '22_undisturbed_fast_combined_240s.mat', '23_undisturbed_fast_combined_360s.mat', '28_disturbed_stationary_magnet_A.mat', '29_disturbed_stationary_magnet_B.mat', '30_disturbed_stationary_magnet_C.mat', '31_disturbed_stationary_magnet_D.mat', '34_disturbed_attached_magnet_3cm.mat', '35_disturbed_attached_magnet_4cm.mat', '36_disturbed_attached_magnet_5cm.mat', '37_disturbed_office_A.mat', '38_disturbed_office_B.mat', '39_disturbed_mixed.mat']
-        
-    
+        self.black_list_error_nan_ratio = {'01_undisturbed_slow_rotation_A.mat': 0.2186762478424742, '04_undisturbed_slow_rotation_with_breaks_A.mat': 0.25715604801477376, '06_undisturbed_fast_rotation_A.mat': 0.43626279559153974, '08_undisturbed_fast_rotation_with_breaks_A.mat': 0.9999818524970964, '13_undisturbed_slow_translation_with_breaks_A.mat': 0.04658960682503077, '15_undisturbed_fast_translation_A.mat': 0.32870211549456835, '17_undisturbed_fast_translation_with_breaks_A.mat': 0.3672212260078369, '19_undisturbed_slow_combined_240s.mat': 0.25412614550215074, '20_undisturbed_slow_combined_360s.mat': 0.016654176034640686, '21_undisturbed_fast_combined.mat': 0.5407503989413459, '22_undisturbed_fast_combined_240s.mat': 0.1286645140985441, '23_undisturbed_fast_combined_360s.mat': 0.17178936145401236, '28_disturbed_stationary_magnet_A.mat': 0.9999804626445764, '29_disturbed_stationary_magnet_B.mat': 0.6084755738669806, '30_disturbed_stationary_magnet_C.mat': 0.08876662834619806, '31_disturbed_stationary_magnet_D.mat': 0.1297805771684986, '34_disturbed_attached_magnet_3cm.mat': 0.044644850216527525, '35_disturbed_attached_magnet_4cm.mat': 0.09310120100549298, '36_disturbed_attached_magnet_5cm.mat': 0.04664505445810108, '37_disturbed_office_A.mat': 0.1104566027689031, '38_disturbed_office_B.mat': 0.059411330145028966, '39_disturbed_mixed.mat': 0.039620436221002794}
+        thr = [1.2, 1.2, 1.8, -1, 1.2, 1.2, 1.3, 1.2, 1.2, 2.3, 2.0, 2.0, -1.0,\
+                                    2.2, 3.2, 3.5, 1.25, 1.5, 1.9, 1.8, 1.7, 6.5]
+        # make dict for error jump threshold
+        self.black_thresholds = dict(zip(self.black_list_error_jump, thr)) 
+
     def broad_white_list_datasets(self):
         return ['02_undisturbed_slow_rotation_B.mat', '03_undisturbed_slow_rotation_C.mat', '05_undisturbed_slow_rotation_with_breaks_B.mat', '07_undisturbed_fast_rotation_B.mat', '09_undisturbed_fast_rotation_with_breaks_B.mat', '10_undisturbed_slow_translation_A.mat', '11_undisturbed_slow_translation_B.mat', '12_undisturbed_slow_translation_C.mat', '14_undisturbed_slow_translation_with_breaks_B.mat', '16_undisturbed_fast_translation_B.mat', '18_undisturbed_fast_translation_with_breaks_B.mat', '24_disturbed_tapping_A.mat', '25_disturbed_tapping_B.mat', '26_disturbed_phone_vibration_A.mat', '27_disturbed_phone_vibration_B.mat', '32_disturbed_attached_magnet_1cm.mat', '33_disturbed_attached_magnet_2cm.mat']
     
@@ -36,6 +41,12 @@ class DatasetLoader:
         missing = len_wh - len(first_part_st)
         all_starts = first_part_st + [next_st for i in range(missing)]
         return all_starts
+
+    def broad_black_under_thresh(self, threshold):
+        # return list of datasets from black list with error jump threshold above given threshold
+        select = {k: v for k, v in self.black_list_error_nan_ratio.items() if v < threshold}
+        return list(select.keys())
+
 
     def load_broad_dataset(self, file_name, mean_initial_samples = False, bypass_black_list = False):
 
@@ -71,12 +82,26 @@ class DatasetLoader:
             acc[:st_idx] = acc[:st_idx].mean(axis=0)
             mag[:st_idx] = mag[:st_idx].mean(axis=0)
 
+        reference = quat[valid_quat,:]
+        threshold = self.black_thresholds.get(file_name, None)
+        if threshold is None or threshold < 0:
+            return None
+        
+        diff = angle_error(reference, reference, align_start=False, shift_samples=1)
+        diff_large = diff > threshold
+        N=2000
+        diff_large = np.convolve(diff_large, np.ones(N, dtype=bool), mode='same') > 0
+        #shift half of N to the right, so that the large diff is marked from the start of the jump
+        diff_large = np.roll(diff_large, N//2)
+        diff_large = np.concatenate((diff_large, np.zeros(1, dtype=bool)))
+        reference[diff_large] = np.NAN
+
         data = {
             'time': timestamp,
             'gyroscope': gyr,
             'accelerometer': acc,
             'magnetometer': mag,
-            'reference': quat[valid_quat,:],
+            'reference': reference,
             'mean_sampling_rate': sr,
             'start_time': {'seconds': current_st, 'index': st_idx},
             'static_detection': { 'acc_threshold': 0.07, 'gyr_threshold': 0.1, 'mag_threshold': 9}

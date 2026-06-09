@@ -71,7 +71,7 @@ def objective_function(params, datasets):
             
             b = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=params[0], tauMag=params[1], 
                         motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False,
-                        useJustaFilter=False)
+                        useJustaFilter=True)
             
             if DOF6:
                 res = b.updateBatch(gyr, acc)
@@ -93,9 +93,9 @@ def objective_function(params, datasets):
         angle_err = angle_err[start_index:stop_index]        
         
         if RMSE:
-            mean_error = np.sqrt(np.mean(angle_err**2))
+            mean_error = np.sqrt(np.nanmean(angle_err**2))
         else:
-            mean_error = np.mean(angle_err)
+            mean_error = np.nanmean(angle_err)
         err += mean_error
     
     time_measuements.append(time_all)
@@ -221,6 +221,13 @@ if __name__ == "__main__":
         if dat is not None:
             test_datasets[file] = dat
 
+
+    black_list = dataset_loader.broad_black_under_thresh(0.2)
+    for ind, file in enumerate(black_list):
+        dataset = dataset_loader.load_broad_dataset(file, bypass_black_list=True)
+        if dataset is not None:
+            test_datasets[file] = dataset
+
     dataset_loader = DatasetLoader()
     names = ['slow_v4.mat', 'medium_v4.mat', 'fast_v4.mat']
     for i in range(1):
@@ -240,8 +247,8 @@ if __name__ == "__main__":
     # dataset['gyroscope']=dataset['gyroscope']*np.array([1.015, 1.015, 1.01]) - bias
     
     # Option 1: Fast local optimization (recommended to try first)
-    print("\n### Method 1: Nelder-Mead (Local Optimization) ###")
-    result = optimize_nelder_mead(datasets)
+    # print("\n### Method 1: Nelder-Mead (Local Optimization) ###")
+    # result = optimize_nelder_mead(datasets)
     
     # # Option 2: Bounded local optimization
     # print("\n### Method 2: L-BFGS-B (Bounded Optimization) ###")
@@ -251,9 +258,9 @@ if __name__ == "__main__":
     # print("\n### Method 3: Differential Evolution (Global Optimization) ###")
     # result = optimize_differential_evolution()
     
-    # Option 4: TuRBO Bayesian Optimization
-    # print("\n### Method 4: TuRBO Bayesian Optimization ###")
-    # result = turbo_bo_optimize(datasets)
+    #Option 4: TuRBO Bayesian Optimization
+    print("\n### Method 4: TuRBO Bayesian Optimization ###")
+    result = turbo_bo_optimize(datasets)
     
     # mean time 
     print("\nAverage time per evaluation: {:.3f}s".format(np.mean(time_measuements)))

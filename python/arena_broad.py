@@ -33,34 +33,26 @@ FIX_BIAS = True
 # dat = dl.load_broad_dataset(file_name=file, mean_initial_samples=True)
 # if dat is not None:
 #     test_datasets[file] = dat
+nan_ratio = {}
+black_list = dl.broad_black_under_thresh(0.2)
 
-black_list = dl.black_list_error_jump
 print("Datasets with error jumps (black list):")
 for ind, file in enumerate(black_list):
-    print(f"{ind}: {file}")
-        
+            
     file = black_list[ind]
-    bl_threshold = [1.2, 1.2, 1.8, -1, 1.2, 1.2, 1.3, 1.2, 1.2, 2.3, 2.0, 2.0, -1.0,\
-        2.2, 3.2, 3.5, 1.25, 1.5, 1.9, 1.8, 1.7, 6.5]
     dataset = dl.load_broad_dataset(file, bypass_black_list=True)
+    if dataset is None:
+        print(f"Dataset {file} skipped due to missing or invalid data.")
+        continue
+    
+    nan_ratio_value = np.sum(np.isnan(dataset['reference'][:, 0])) / len(dataset['reference'][:, 0])
+    nan_ratio[file] = nan_ratio_value
+    print(f"Dataset: {file}, NaN ratio: {nan_ratio_value:.2%}")
 
-    diff = angle_error(dataset['reference'], dataset['reference'], align_start=False, shift_samples=1)
-    diff_large = diff > bl_threshold[ind]
-    N=2000
-    diff_large = np.convolve(diff_large, np.ones(N, dtype=bool), mode='same') > 0
-    #shift half of N to the right, so that the large diff is marked from the start of the jump
-    diff_large = np.roll(diff_large, N//2)
-    diff_large = np.concatenate((diff_large, np.zeros(1, dtype=bool)))
-    dataset['reference'][diff_large] = np.NAN
-    # nan ratio
-    nan_ratio = np.sum(diff_large) / len(diff_large)
-    print(f"Dataset: {file}, NaN ratio: {nan_ratio:.2%}")
-
-# plt.figure()
-# plt.plot(diff, label='diff')
-# plt.plot(diff_large, label='diff_large')
-# plt.legend()
-plt.show()
+    # plt.figure()
+    # plt.plot(dataset['reference'], label='diff')
+    # plt.legend()
+    # plt.show()
 sys.exit()
 # if diff_large is true, make true for consequentive N samples
 # N=1000
