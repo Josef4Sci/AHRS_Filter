@@ -71,7 +71,7 @@ def objective_function(params, datasets):
             
             b = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=params[0], tauMag=params[1], 
                         motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False,
-                        useJustaFilter=True)
+                        useJustaFilter=True, useAccLp=False, gyroIntegrationMethod=1)
             
             if DOF6:
                 res = b.updateBatch(gyr, acc)
@@ -247,8 +247,8 @@ if __name__ == "__main__":
     # dataset['gyroscope']=dataset['gyroscope']*np.array([1.015, 1.015, 1.01]) - bias
     
     # Option 1: Fast local optimization (recommended to try first)
-    # print("\n### Method 1: Nelder-Mead (Local Optimization) ###")
-    # result = optimize_nelder_mead(datasets)
+    print("\n### Method 1: Nelder-Mead (Local Optimization) ###")
+    result = optimize_nelder_mead(datasets)
     
     # # Option 2: Bounded local optimization
     # print("\n### Method 2: L-BFGS-B (Bounded Optimization) ###")
@@ -259,8 +259,8 @@ if __name__ == "__main__":
     # result = optimize_differential_evolution()
     
     #Option 4: TuRBO Bayesian Optimization
-    print("\n### Method 4: TuRBO Bayesian Optimization ###")
-    result = turbo_bo_optimize(datasets)
+    # print("\n### Method 4: TuRBO Bayesian Optimization ###")
+    # result = turbo_bo_optimize(datasets)
     
     # mean time 
     print("\nAverage time per evaluation: {:.3f}s".format(np.mean(time_measuements)))

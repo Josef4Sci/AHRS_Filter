@@ -81,20 +81,23 @@ class DatasetLoader:
             gyr[:st_idx] = gyr[:st_idx].mean(axis=0)
             acc[:st_idx] = acc[:st_idx].mean(axis=0)
             mag[:st_idx] = mag[:st_idx].mean(axis=0)
-
+            
+            
         reference = quat[valid_quat,:]
-        threshold = self.black_thresholds.get(file_name, None)
-        if threshold is None or threshold < 0:
-            return None
-        
-        diff = angle_error(reference, reference, align_start=False, shift_samples=1)
-        diff_large = diff > threshold
-        N=2000
-        diff_large = np.convolve(diff_large, np.ones(N, dtype=bool), mode='same') > 0
-        #shift half of N to the right, so that the large diff is marked from the start of the jump
-        diff_large = np.roll(diff_large, N//2)
-        diff_large = np.concatenate((diff_large, np.zeros(1, dtype=bool)))
-        reference[diff_large] = np.NAN
+        if file_name in self.black_list_error_jump:
+            
+            threshold = self.black_thresholds.get(file_name, None)
+            if threshold is None or threshold < 0:
+                return None
+            
+            diff = angle_error(reference, reference, align_start=False, shift_samples=1)
+            diff_large = diff > threshold
+            N=2000
+            diff_large = np.convolve(diff_large, np.ones(N, dtype=bool), mode='same') > 0
+            #shift half of N to the right, so that the large diff is marked from the start of the jump
+            diff_large = np.roll(diff_large, N//2)
+            diff_large = np.concatenate((diff_large, np.zeros(1, dtype=bool)))
+            reference[diff_large] = np.NAN
 
         data = {
             'time': timestamp,

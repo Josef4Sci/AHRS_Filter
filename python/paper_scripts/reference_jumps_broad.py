@@ -92,5 +92,5 @@ axs[1].plot(dat_cp['time'][interval[0]:interval[1]-1], diff[interval[0]:interval
 axs[1].set_ylabel('Diff angle (deg)')
 axs[1].legend()    
 
-
-plt.savefig('paper_j2\\figures\\broad_jump_issue.png', dpi=300)
+base_fold = 'paper_j2\\figures\\'
+plt.savefig(base_fold + 'broad_jump_issue.png', dpi=300)
