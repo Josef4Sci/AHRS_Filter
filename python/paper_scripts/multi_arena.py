@@ -7,15 +7,15 @@ import os
 
 _python_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _python_dir)
-sys.path.insert(1, os.path.join(_python_dir, 'vqf_local', 'vqf'))
+sys.path.insert(1, os.path.join(_python_dir, 'vqf_local'))
 
 from dataset_loader import DatasetLoader
 
-from vqf import VQF as PyVQF
+from vqf import VQF
 from utils import angle_error
 
 RMSE = True
-DISTURB_INCLUDED = True
+DISTURB_INCLUDED = False
 base_fold = 'paper_j2\\figures\\'
 
 test_datasets = {}
@@ -90,7 +90,7 @@ for dataset_name, dataset in test_datasets.items():
         
         not_base = not j_filter['base']
         start_time = time.time()
-        vq = PyVQF(1.0/dat['mean_sampling_rate'], 
+        vq = VQF(1.0/dat['mean_sampling_rate'], 
                     tauAcc=j_filter['filter']['tauAcc'], tauMag=j_filter['filter']['tauMag'],
                     motionBiasEstEnabled=not_base, restBiasEstEnabled=not_base,
                     magDistRejectionEnabled=not_base, useJustaFilter= j_filter['just'])
@@ -99,7 +99,7 @@ for dataset_name, dataset in test_datasets.items():
         result = res['quat9D']
         
         alignIndex = int(dat['start_time']['index']*0.5)
-        angle_err = angle_error(result, dat['reference'], align_start=True, shift_samples=0, align_index=alignIndex, use_imu=DOF6)
+        angle_err = angle_error(result, dat['reference'], align_start=True, shift_samples=0, align_index=alignIndex, use_imu=False)
         
         angle_err = angle_err[start_index:stop_index]   
                 
@@ -157,21 +157,34 @@ else:
     markers = ['o', 's', '^', 'D']
     dataset_keys = list(test_datasets.keys())
     clean_keys = [clean_label(k) for k in dataset_keys]
-    fig, ax = plt.subplots(figsize=(8, 5))
-    fig.suptitle('Filter Performance Across Datasets')
-    
-    for i, (filter_name, j_filter) in enumerate(test_filters.items()):
-        ls = linestyles[i % len(linestyles)]
-        mk = markers[i % len(markers)]
-        ax.plot(range(len(dataset_keys)), j_filter['errors'], label=filter_name,
-                 linestyle=ls, marker=mk, markersize=4)
+
+    if DISTURB_INCLUDED:
+        fig, ax = plt.subplots(figsize=(8, 5))
+        fig.suptitle('Filter Performance Across Disturbed Datasets (fixed)')
+        
+        for i, (filter_name, j_filter) in enumerate(test_filters.items()):
+            ls = linestyles[i % len(linestyles)]
+            mk = markers[i % len(markers)]
+            ax.plot(range(len(dataset_keys)), j_filter['errors'], label=filter_name,
+                    linestyle=ls, marker=mk, markersize=4)
+    else:
+        fig, ax = plt.subplots(figsize=(6, 5))
+        fig.suptitle('Filter Performance Across Whitelisted Datasets')
+        
+        for i, (filter_name, j_filter) in enumerate(test_filters.items()):
+            ls = linestyles[i % len(linestyles)]
+            mk = markers[i % len(markers)]
+            ax.plot(range(len(dataset_keys)), j_filter['errors'], label=filter_name,
+                    linestyle=ls, marker=mk, markersize=4)
 
     ax.set_ylabel('RMSE (deg)')
     ax.set_xticks(range(len(dataset_keys)))
-    ax.set_xticklabels(clean_keys, rotation=45, ha='center')
-    plt.subplots_adjust(bottom=0.3)
+    ax.set_xticklabels(clean_keys, rotation=90, ha='center')
+    
+    plt.subplots_adjust(bottom=0.4)
     plt.legend()
-    plt.savefig(base_fold + 'multi_arena_comparison.png', dpi=300)
+    filename = 'multi_arena_comparison.png' if DISTURB_INCLUDED else 'multi_arena_comparison_whitelist.png'
+    plt.savefig(base_fold + filename, dpi=300)
     plt.show()
 
 for filter_name, j_filter in test_filters.items():

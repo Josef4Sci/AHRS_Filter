@@ -27,7 +27,7 @@ black_list = dl.black_list_error_jump
 ind = 14
 file = black_list[ind]
 bl_threshold = [1.2, 1.2, 1.8, -1, 1.2, 1.2, 1.3, 1.2, 1.2, 2.3, 2.0, 2.0, -1.0, 2.2, 2.2]
-dataset = dl.load_broad_dataset(file, bypass_black_list=True)
+dataset = dl.load_broad_dataset(file, bypass_black_list=True, skip_jump_fix=True)
 test_datasets['01_undisturbed_slow_rotation_A.mat'] = dataset
 
 diff = angle_error(dataset['reference'], dataset['reference'], align_start=False, shift_samples=1)
