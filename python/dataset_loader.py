@@ -48,7 +48,7 @@ class DatasetLoader:
         return list(select.keys())
 
 
-    def load_broad_dataset(self, file_name, mean_initial_samples = False, bypass_black_list = False):
+    def load_broad_dataset(self, file_name, mean_initial_samples = False, bypass_black_list = False, skip_jump_fix = False):
 
         if file_name in self.black_list_error_jump and not bypass_black_list:
             return None
@@ -84,7 +84,7 @@ class DatasetLoader:
             
             
         reference = quat[valid_quat,:]
-        if file_name in self.black_list_error_jump:
+        if file_name in self.black_list_error_jump and not skip_jump_fix:
             
             threshold = self.black_thresholds.get(file_name, None)
             if threshold is None or threshold < 0:
@@ -92,7 +92,7 @@ class DatasetLoader:
             
             diff = angle_error(reference, reference, align_start=False, shift_samples=1)
             diff_large = diff > threshold
-            N=2000
+            N=6000
             diff_large = np.convolve(diff_large, np.ones(N, dtype=bool), mode='same') > 0
             #shift half of N to the right, so that the large diff is marked from the start of the jump
             diff_large = np.roll(diff_large, N//2)
