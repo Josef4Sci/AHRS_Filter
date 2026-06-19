@@ -1,8 +1,34 @@
 import numpy as np
+from enum import IntEnum
 from quaternion_library_jit import fast_cross, fast_norm, quatern_conj_single, quatern_prod_single, quatern_prod, quatern_conj, quaternion_rotate_vector
 from matplotlib import pyplot as plt
 from scipy.spatial.transform import Rotation, Slerp
 
+
+class FilterType(IntEnum):
+    FILTER_VQF       = 0
+    FILTER_BASIC_VQF = 1
+    FILTER_FAST_VQF  = 2
+    FILTER_MAHONY     = 3
+    FILTER_MADGWICK   = 4
+    FILTER_SKIP       = 5
+    FILTER_JUSTA_ORIG = 6
+
+def get_optim_params_all():
+    test_filters = { # 9DOF
+    'Madgwick': {'filter': {'tauAcc':0.128, 'tauMag': 0.0}, 'errors': [], 'type': 1, 'filter_type': FilterType.FILTER_MADGWICK},
+    'Justa AHRS': {'filter': {'tauAcc': 0.6, 'tauMag': 0.6}, 'errors': [], 'type': 1, 'filter_type': FilterType.FILTER_JUSTA_ORIG},
+    'Basic VQF': {'filter': {'tauAcc': 2.09, 'tauMag': 11.0}, 'errors': [], 'type': 1, 'filter_type': FilterType.FILTER_BASIC_VQF},
+    'VQF': {'filter': {'tauAcc': 2.89, 'tauMag': 8.1}, 'errors': [], 'type': 1, 'filter_type': FilterType.FILTER_VQF},
+    'FAST VQF (ours)': {'filter': {'tauAcc': 2.1, 'tauMag': 0.73}, 'errors': [], 'type': 1, 'filter_type': FilterType.FILTER_FAST_VQF},
+    }
+    return test_filters
+
+def get_color_sequence():
+    default_color_sequence = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    #swap colors to match paper figure
+    color_sequence = [default_color_sequence[2], default_color_sequence[1], default_color_sequence[4], default_color_sequence[0], default_color_sequence[3]]
+    return color_sequence
 
 def interpolate_with_scipy(quaternions, weights):
     """
@@ -59,7 +85,7 @@ def vector_angle_deg(a, b):
     cos_theta = np.clip(cos_theta, -1.0, 1.0)  # numerical safety
     return np.degrees(np.arccos(cos_theta))
 
-def angle_error(q_est, q_ref, use_imu=False, align_start=False, shift_samples=0, align_index=20):
+def angle_error(q_est, q_ref, use_imu=False, align_start=False, shift_samples=0, align_index=20, yaw_only=False):
     
     min_norm = np.min(np.linalg.norm(q_est, axis=1))
     if min_norm < 0.9 or min_norm > 1.1:
@@ -73,7 +99,8 @@ def angle_error(q_est, q_ref, use_imu=False, align_start=False, shift_samples=0,
     else:
         q_est_in = q_est
 
-    if not use_imu:
+    specific_component = use_imu or yaw_only
+    if not specific_component:
         # implement shift by multiplying with conjugate of reference at shift_samples
         if shift_samples > 0:        
             q_err = qdiff(q_ref[shift_samples:,:], q_est_in[0:-(shift_samples),:])
@@ -88,11 +115,11 @@ def angle_error(q_est, q_ref, use_imu=False, align_start=False, shift_samples=0,
         # Calculate angular error
         angle_error = angle_diff_deg(q_err)    
     else:
-        acc_ref = np.array([0, 0, 1])
+        ref = np.array([0, 0, 1]) if use_imu else np.array([0, 1, 0])
         angle_error = np.zeros(q_est_in.shape[0])
         for i in range(q_est_in.shape[0]):
-            est_acc = quaternion_rotate_vector(q_est_in[i], acc_ref)
-            ref_acc = quaternion_rotate_vector(q_ref[i], acc_ref)
+            est_acc = quaternion_rotate_vector(q_est_in[i], ref)
+            ref_acc = quaternion_rotate_vector(q_ref[i], ref)
             angle_error[i] = vector_angle_deg(est_acc, ref_acc)
         
     return angle_error

@@ -1,5 +1,5 @@
 import pickle
-from time import time
+from time import perf_counter as time
 
 import numpy as np
 
@@ -10,10 +10,9 @@ sys.path.insert(0, 'python\\vqf_local')
 
 from vqf import VQF
 from dataset_loader import DatasetLoader
+from utils import FilterType, get_optim_params_all
 
 N_COPY = 100
-
-BASIC_VQF = False
 
 test_datasets = {}
 dl = DatasetLoader()
@@ -27,49 +26,47 @@ gyr = np.ascontiguousarray(gyr, dtype=np.float64)
 acc = np.ascontiguousarray(acc, dtype=np.float64)
 mag = np.ascontiguousarray(mag, dtype=np.float64)
 
-t_vqf = 0
-t_justa = 0
-t_base = 0
+filters = get_optim_params_all()
 
-for i in range(10):
-    if BASIC_VQF:
-        b = VQF(1.0/dat['mean_sampling_rate'], tauAcc=1.1, tauMag=1.1, 
-                    motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False,
-                    useJustaFilter=False, useAccLp=False)
-    else:
-        b = VQF(1.0/dat['mean_sampling_rate'], tauAcc=1.1, tauMag=1.1, 
-                    motionBiasEstEnabled=True, restBiasEstEnabled=True, magDistRejectionEnabled=True,
-                    useJustaFilter=False, useAccLp=False)
+for filter_name, j_filter in filters.items():
+    j_filter['times'] = []
 
-    time_start_vqf = time()
-    res = b.updateBatch(gyr, acc, mag)  
-    time_end_vqf = time()
-    t_vqf += time_end_vqf - time_start_vqf
+t_base = []
+
+for i in range(5):
+    for filter_name, j_filter in filters.items():
+        vqf_full = j_filter['filter_type'] == FilterType.FILTER_VQF
+        if j_filter['filter_type'] == FilterType.FILTER_FAST_VQF or j_filter['filter_type'] == FilterType.FILTER_JUSTA_ORIG:
+            gyro_int = 1 
+        else:
+            gyro_int = 0
+            
+        vq = VQF(1.0/dat['mean_sampling_rate'], 
+                    tauAcc=j_filter['filter']['tauAcc'], tauMag=j_filter['filter']['tauMag'],
+                    motionBiasEstEnabled=vqf_full, restBiasEstEnabled=vqf_full,
+                    magDistRejectionEnabled=vqf_full, filterType=int(j_filter['filter_type']), gyroIntegrationMethod=gyro_int)
+        start_time = time()
+        res = vq.updateBatch(gyr, acc, mag) 
+        time_end_vqf = time()
+        j_filter['times'].append(time_end_vqf - start_time)
+    
     
     b = VQF(1.0/dat['mean_sampling_rate'], tauAcc=1.1, tauMag=1.1, 
                 motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False,
-                useJustaFilter=True, useAccLp=False, gyroIntegrationMethod=1)
-
-    time_start_justa = time()
-    res = b.updateBatch(gyr, acc, mag)  
-    time_end_justa = time()
-    t_justa += time_end_justa - time_start_justa
-    b = VQF(1.0/dat['mean_sampling_rate'], tauAcc=1.1, tauMag=1.1, 
-                motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False,
-                useJustaFilter=True, useAccLp=True)
+                filterType=int(FilterType.FILTER_SKIP))
     
     time_start_base = time()
     res = b.updateBatch(gyr, acc, mag)  
     time_end_base = time()
-    t_base += time_end_base - time_start_base
+    t_base.append(time_end_base - time_start_base)
     print(f"Iteration {i+1}:")
 
-len_gyr = gyr.shape[0]*N_COPY
+len_gyr = gyr.shape[0]
+t_base_ns = np.mean(t_base)*1e9/len_gyr
 
-print(f"Time taken VQF clean: {(t_vqf-t_base)*1e9/len_gyr} ns")
-print(f"Time taken Justa clean: {(t_justa-t_base)*1e9/len_gyr} ns")
-print(f"Time taken Base: {t_base*1e9/len_gyr} ns")
-
-print(f"Improvement: {(1 - ((t_justa - t_base) / (t_vqf - t_base))) * 100:.2f}%")
+for filter_name, j_filter in filters.items():
+    t_vqf = np.mean(j_filter['times'])
+    print(f"Filter: {filter_name}, time taken clean: {t_vqf*1e9/len_gyr - t_base_ns} ns")
+    
 # plt.plot(res['quat9D'])
 # plt.show()

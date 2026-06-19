@@ -21,25 +21,39 @@
 \providecommand{\BIBdecl}{\relax}
 \BIBdecl
 
-\bibitem{mahony2008}
-R.~Mahony, T.~Hamel, and J.-M. Pflimlin, ``Nonlinear complementary filters on
-  the special orthogonal group,'' \emph{IEEE Transactions on Automatic
-  Control}, vol.~53, no.~5, pp. 1203--1218, 2008.
+\bibitem{laidig2021broad}
+D.~Laidig, M.~Caruso, A.~Cereatti, and T.~Seel, ``Broad—a benchmark for
+  robust inertial orientation estimation,'' \emph{Data}, vol.~6, no.~7, p.~72,
+  2021.
 
-\bibitem{madgwick2010}
-S.~O.~H. Madgwick, ``An efficient orientation filter for inertial and
-  inertial/magnetic sensor arrays,'' in \emph{Report x-io and University of
-  Bristol}, vol.~25, 2010, pp. 113--118.
-
-\bibitem{laidig2023vqf}
-D.~Laidig and T.~Seel, ``{VQF}: Highly accurate {IMU} orientation estimation
-  with bias estimation and magnetic disturbance rejection,'' \emph{Information
-  Fusion}, vol.~91, pp. 187--204, 2023.
+\bibitem{caruso2021sassari}
+M.~Caruso, A.~M. Sabatini, M.~Knaflitz, M.~Gazzoni, U.~Della~Croce, and
+  A.~Cereatti, ``Orientation estimation through magneto-inertial sensor fusion:
+  A heuristic approach for suboptimal parameters tuning,'' \emph{IEEE Sensors
+  Journal}, vol.~21, no.~3, pp. 3408--3419, 2020.
 
 \bibitem{justa2020}
 J.~Justa, V.~{\v{S}}m{\'{i}}dl, and A.~Ham{\'{a}}{\v{c}}ek, ``Fast {AHRS}
   filter for accelerometer, magnetometer, and gyroscope combination with
   separated sensor corrections,'' \emph{Sensors}, vol.~20, no.~14, p. 3824,
   2020.
+
+\bibitem{madgwick2010}
+S.~O. Madgwick \emph{et~al.}, ``An efficient orientation filter for inertial
+  and inertial/magnetic sensor arrays,'' 2010.
+
+\bibitem{mahony2008}
+R.~Mahony, T.~Hamel, and J.-M. Pflimlin, ``Nonlinear complementary filters on
+  the special orthogonal group,'' \emph{IEEE Transactions on automatic
+  control}, vol.~53, no.~5, pp. 1203--1218, 2008.
+
+\bibitem{laidig2023vqf}
+D.~Laidig and T.~Seel, ``{VQF}: Highly accurate {IMU} orientation estimation
+  with bias estimation and magnetic disturbance rejection,'' \emph{Information
+  Fusion}, vol.~91, pp. 187--204, 2023.
+
+\bibitem{nelder1965}
+J.~A. Nelder and R.~Mead, ``A simplex method for function minimization,''
+  \emph{The computer journal}, vol.~7, no.~4, pp. 308--313, 1965.
 
 \end{thebibliography}

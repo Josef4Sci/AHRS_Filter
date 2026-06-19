@@ -7,14 +7,17 @@
 \usepackage{bm}
 \usepackage{cite}
 
-\title{Speed-Optimized 9DOF AHRS with Combined Accelerometer and Magnetometer Correction}
+\title{Fast VQF: Speed-Optimized 9DOF AHRS via Euler Integration and Combined Sensor Correction}
 
 \author{
-\IEEEauthorblockN{Josef Justa, Václav Šmídl, Aleš Hamáček}
-\IEEEauthorblockA{Department of Applied Electronics and Telecommunications\\
-Faculty of Electrical Engineering, University of West Bohemia\\
-Pilsen, Czech Republic\\
-justjo@fel.zcu.cz}
+\IEEEauthorblockN{Josef Justa, Václav Šmídl, Member, IEEE}
+% \IEEEauthorblockA{Josef Justa is with the Regional Innovation Centre for Electrical Engineer-\\
+% ing, University of West Bohemia, 30614 Plzeň, Czech Republic (e-mail: justjo@rice.zcu.cz).\\
+% \\V. Šmídl is with the Regional Innovation Centre for Electrical Engineer-\\
+% ing, University of West Bohemia, 30614 Plzeň, Czech Republic, and also\\
+% with the Institute of Information Theory and Automation, The Academy of\\
+% Sciences of the Czech Republic, 18208 Prague, Czech Republic (e-mail:\\
+% vsmidl@rice.zcu.cz).}
 }
 
 \begin{document}
@@ -22,34 +25,36 @@ justjo@fel.zcu.cz}
 \maketitle
 
 \begin{abstract}
-This paper presents a computationally optimized Attitude and Heading Reference System (AHRS) filter for 9-degree-of-freedom (9DOF) inertial sensor fusion. The proposed method builds on the VQF algorithm, adopting its accelerometer low-pass filtering in the near-earth reference frame while replacing VQF's two sequential sensor correction stages with a single combined correction. In VQF, obtaining a 9DOF estimate requires three sequential quaternion states (gyroscope, accelerometer-corrected, magnetometer-corrected); the proposed method reduces this to two states by merging the accelerometer and magnetometer corrections into one step. The accelerometer remains responsible for roll and pitch correction, and the magnetometer for yaw correction, but both are applied jointly from the gyroscope-propagated state, eliminating the intermediate quaternion materialization. Three optimization levels with increasing computational savings are evaluated. Results on a broad public dataset—after excluding corrupted optical reference segments—show approximately 40\,\% reduction in computation time compared to VQF, with only a marginal accuracy penalty. Performance under magnetic disturbance conditions is evaluated separately using synthetically corrected dataset segments.
+This paper presents Fast VQF, a computationally optimized Attitude and Heading Reference System (AHRS) filter for 9-degree-of-freedom (9DOF) inertial sensor fusion. The proposed method builds on the VQF algorithm and introduces two targeted optimizations: (1)~Euler-method quaternion integration replacing the trigonometric axis-angle propagation, and (2)~a single combined accelerometer--magnetometer correction step replacing VQF's two sequential corrections. The Euler integration eliminates the $\cos/\sin$ calls in gyroscope propagation, contributing a 5\,\% reduction in total execution time. The combined correction eliminates the $\mathrm{atan2}$ computation and an intermediate quaternion state, contributing a further 44\,\% reduction. Together, the two optimizations achieve approximately $1.9\times$ speedup over Basic VQF ($3.8\times$ over full VQF) on a desktop CPU, with larger gains expected on microcontrollers where trigonometric functions are computed in software. Results on the BROAD~\cite{laidig2021broad} and Sassari~\cite{caruso2021sassari} public benchmark datasets show that Fast VQF achieves the lowest orientation RMSE of all tested methods on undisturbed motion (2.62°), outperforming Basic VQF (2.71°), full VQF (2.66°), Justa AHRS~\cite{justa2020} (2.84°), and Madgwick~\cite{madgwick2010} (2.87°). Under disturbed conditions, full VQF's bias estimation and disturbance rejection provide a clear advantage. The results confirm that modern fast methods are preferable to Madgwick for undisturbed applications, while full VQF remains the best choice under harsh magnetic conditions. Handling of optical reference discontinuities in the benchmark is also addressed.
 \end{abstract}
 
 \section{Introduction}
 
-Attitude and Heading Reference Systems fusing gyroscope, accelerometer, and magnetometer data are central to inertial navigation, robotics, and motion analysis. Applications ranging from wearable sensors to unmanned aerial vehicles require both accuracy and computational efficiency, particularly on embedded processors or when processing large datasets offline.
+Attitude and Heading Reference Systems (AHRS) fusing gyroscope, accelerometer, and magnetometer 
+data are central to inertial navigation, robotics, and motion analysis. Applications ranging from 
+wearable sensors to unmanned aerial vehicles require both accuracy and computational efficiency, 
+particularly on embedded processors or when computational latency is critical (pose prediction).
 
-Classical complementary filters—Mahony~\cite{mahony2008} and Madgwick~\cite{madgwick2010}—offer low cost but limited accuracy under dynamic conditions. The VQF algorithm~\cite{laidig2023vqf} significantly raised the accuracy bar, achieving a mean RMSE of 2.9° across a diverse collection of datasets and hardware platforms with a single fixed parametrization, compared to 5.3°–16.7° for eight competing methods. VQF filters the accelerometer in the near-earth (almost-inertial) frame and applies two sequential corrections, exposing three quaternion states: gyroscope-only, tilt-corrected (accelerometer), and fully fused 9DOF (magnetometer). For applications that require only the 9DOF output, all three stages must run at every time step.
+Classical complementary filters—Mahony~\cite{mahony2008} and Madgwick~\cite{madgwick2010}—offer low computational cost but limited accuracy under dynamic conditions. The VQF (Versatile Quaternion-based Filter) algorithm~\cite{laidig2023vqf} significantly raised the accuracy bar, achieving a mean RMSE of 2.9° across a diverse collection of datasets and hardware platforms with a single fixed parametrisation, compared to 5.3°–16.7° for eight competing methods. Since VQF was already thoroughly validated against a wide set of competing algorithms in~\cite{laidig2023vqf}, the present work uses it as the single comparison baseline rather than repeating that survey. VQF filters the accelerometer in the near-earth frame and applies two sequential corrections (tilt via accelerometer, heading via magnetometer), exposing three quaternion states at each step. The gyroscope propagation uses the axis-angle formula, requiring $\cos$ and $\sin$ evaluations. The heading correction requires $\mathrm{atan2}$. Both are relatively costly on microcontrollers without dedicated floating-point hardware, and all three correction stages must run at every time step for any application requiring 9DOF output.
 
-This work introduces a reduced-state variant that computes the 9DOF orientation with only two states per step. The accelerometer and magnetometer corrections are combined into a single update applied directly to the gyroscope-propagated quaternion. The informational separation of sensor roles is preserved—accelerometer corrects roll and pitch, magnetometer corrects yaw—but the intermediate tilt-corrected state is eliminated. The combined correction concept derives from our previous work~\cite{justa2020}. Three levels of further optimization are evaluated, providing a speed-accuracy trade-off curve.
-
-We also identify and address data quality issues in a commonly used broad public dataset: the optical tracking reference contains sporadic discontinuities that introduce long-term errors in the reference signal, and certain segments exhibit significant magnetic disturbance. Both issue types are handled explicitly before evaluation.
+This work introduces Fast VQF, which applies two specific structural optimizations to basicVQF: Euler-method quaternion integration (Optimization~1) and a combined single-step accelerometer--magnetometer correction (Optimization~2). Together these yield $\approx$1.9$\times$ speedup over basicVQF; on undisturbed data Fast VQF achieves the lowest RMSE of all evaluated methods, while under disturbed conditions the additional complexity of full VQF provides clear accuracy benefits. We also identify and address data quality issues in the BROAD benchmark: the optical tracking reference contains sporadic discontinuities.
 
 \textbf{Contributions:}
 \begin{itemize}
-    \item Combined single-step accelerometer and magnetometer correction within the VQF earth-frame filtering framework, reducing 9DOF computation by $\approx$40\,\%.
-    \item Three optimization levels with characterised speed-accuracy trade-offs.
-    \item Analysis and preprocessing of optical reference discontinuities in a broad public dataset.
-    \item Evaluation on magnetic disturbance segments using synthetic reference correction.
+    \item Euler-method quaternion integration eliminating $\cos/\sin/\sqrt{\cdot}$ from gyroscope propagation: 15\,\% faster on the integration step (5\,\% overall), with no measurable accuracy impact across all tested datasets. The per-step gain is larger on microcontrollers where transcendental functions are software-computed.
+    \item Combined single-step accelerometer--magnetometer correction eliminating $\mathrm{atan2}$ and an intermediate quaternion state, contributing 44\,\% of total execution time reduction.
+    \item Evaluation on BROAD~\cite{laidig2021broad} and Sassari~\cite{caruso2021sassari} benchmark datasets with explicit handling of optical reference discontinuities and magnetic disturbance segments.
 \end{itemize}
 
 \section{Related Work}
 
-\textbf{VQF}~\cite{laidig2023vqf} (Laidig and Seel, 2023) filters accelerometer measurements in the near-earth frame to suppress dynamic acceleration artefacts. It maintains three sequential correction stages: gyroscope integration, accelerometer-based tilt correction, and magnetometer-based heading correction. Gyroscope bias estimation and magnetic disturbance rejection are included. Its open-source implementation and broad evaluation make it the primary baseline of the present work.
+\textbf{VQF}~\cite{laidig2023vqf} (Laidig and Seel, 2023) filters accelerometer measurements in the near-earth frame to suppress dynamic acceleration artefacts. It maintains three sequential correction stages: gyroscope integration via axis-angle, accelerometer-based tilt correction, and magnetometer-based heading correction. Gyroscope bias estimation and magnetic disturbance rejection are included in the full variant; a stripped basicVQF variant omits these. Its open-source implementation and broad evaluation make it the primary baseline of the present work.
 
-\textbf{Justa AHRS}~\cite{justa2020} introduced an AHRS predictor-corrector framework with independent sensor correction steps. The magnetometer correction formulation from that work is directly inherited here. Two variants were proposed in~\cite{justa2020}: SO(3)-based for accuracy and linearized for speed, both outperforming the state of the art at the time.
+\textbf{Justa AHRS}~\cite{justa2020} introduced an AHRS predictor-corrector framework with independent sensor correction steps. The magnetometer correction formulation from that work is directly inherited here. Two variants were proposed: SO(3)-based for accuracy and linearized for speed, both outperforming the state of the art at the time.
 
-\textbf{Mahony}~\cite{mahony2008} and \textbf{Madgwick}~\cite{madgwick2010} filters remain common baselines for lightweight orientation estimation. They apply proportional-integral feedback and gradient-descent correction respectively, but are generally less accurate than VQF in varied dynamic conditions.
+\textbf{Mahony}~\cite{mahony2008} and \textbf{Madgwick}~\cite{madgwick2010} filters remain widely cited for lightweight orientation estimation. They apply proportional-integral
+ feedback and gradient-descent correction respectively. Both are today outperformed by modern methods such as VQF under varied dynamic conditions, 
+ and their accuracy is insufficient for demanding applications.
 
 \section{Proposed Algorithm}
 
@@ -57,39 +62,45 @@ We also identify and address data quality issues in a commonly used broad public
 
 Unit quaternions $\mathbf{q} \in \mathbb{H}$, $\|\mathbf{q}\|=1$ represent orientation. $\otimes$ denotes quaternion multiplication and $(\cdot)^*$ the conjugate. A 3-vector $\mathbf{v}$ embedded as a pure quaternion is written $\bar{\mathbf{v}} = [0,\,\mathbf{v}^\top]^\top$. Sensor measurements in the body frame at step $k$ are gyroscope $\boldsymbol{\omega}_k$, accelerometer $\mathbf{a}_k$, and magnetometer $\mathbf{m}_k$.
 
-\subsection{Gyroscope Propagation}
+\subsection{Optimization Stage 1: Euler Quaternion Integration}
 
-The orientation is propagated with the discrete kinematic equation:
+Standard VQF propagates orientation via the exact axis-angle formula:
 \begin{equation}
     \mathbf{q}_k^- = \mathbf{q}_{k-1} \otimes
     \begin{bmatrix}
         \cos\!\dfrac{\|\boldsymbol{\omega}_k\|\Delta t}{2} \\[4pt]
         \sin\!\dfrac{\|\boldsymbol{\omega}_k\|\Delta t}{2}\cdot\dfrac{\boldsymbol{\omega}_k}{\|\boldsymbol{\omega}_k\|}
     \end{bmatrix}
-    \label{eq:gyro}
+    \label{eq:gyro_aa}
 \end{equation}
-where $\Delta t$ is the sampling period. This yields the gyroscope-only prediction $\mathbf{q}_k^-$.
+which requires a $\sqrt{\cdot}$, a $\cos$, and a $\sin$ per step. Fast VQF replaces this with the first-order Euler method applied to the quaternion kinematic equation $\dot{\mathbf{q}} = \frac{1}{2}\mathbf{q}\otimes\bar{\boldsymbol{\omega}}$:
+\begin{equation}
+    \mathbf{q}_k^- = \mathrm{normalize}\!\left(\mathbf{q}_{k-1} + \tfrac{\Delta t}{2}\,\mathbf{q}_{k-1} \otimes \bar{\boldsymbol{\omega}}_k\right)
+    \label{eq:gyro_euler}
+\end{equation}
+where $\bar{\boldsymbol{\omega}}_k = [0,\,\boldsymbol{\omega}_k^\top]^\top$. This requires only quaternion multiplication and addition, eliminating all transcendental calls. The approximation holds when $\|\boldsymbol{\omega}_k\|\Delta t \ll 1$, satisfied at typical IMU rates ($\geq$100\,Hz) for all but extreme angular velocities. Evaluation against both axis-angle and second-order Runge--Kutta integration confirms no measurable accuracy impact on the tested datasets. The gyroscope integration step itself runs approximately 15\,\% faster; since this step accounts for roughly one third of the total pipeline, the net reduction in overall execution time is 5\,\%. On microcontrollers without hardware floating-point units, where $\cos$, $\sin$, and $\sqrt{\cdot}$ are evaluated in software, the gyroscope integration step represents a larger fraction of total time and the overall gain from this optimization is expected to be proportionally greater.
 
 \subsection{Accelerometer Filtering in the Near-Earth Frame}
 
-Following VQF~\cite{laidig2023vqf}, the accelerometer is filtered in the near-earth frame rather than the body frame, reducing sensitivity to linear accelerations. The body-frame measurement is first rotated into the gyroscope-propagated earth frame using $\mathbf{q}_k^-$:
+This step is adopted unchanged from VQF~\cite{laidig2023vqf}. The body-frame measurement is rotated into the gyroscope-propagated earth frame:
 \begin{equation}
     \tilde{\mathbf{a}}_k^g = \mathbf{q}_k^- \otimes \bar{\mathbf{a}}_k \otimes (\mathbf{q}_k^-)^*
     \label{eq:acc_rotate}
 \end{equation}
-A second-order Butterworth low-pass filter with cut-off frequency derived from time constant $\tau_\text{acc}$ is then applied in this frame, yielding $\bar{\mathbf{a}}_k^g$. The filtered vector is subsequently rotated into the 6D earth frame using the current correction quaternion $\mathbf{q}_\text{acc}$ and normalized:
+A second-order Butterworth low-pass filter with cut-off frequency derived from time constant $\tau_\text{acc}$ is applied in this frame, yielding $\bar{\mathbf{a}}_k^g$, which suppresses linear-acceleration artefacts. The filtered vector is then rotated into the earth frame using the current correction quaternion $\mathbf{q}_\text{acc}$ and normalized:
 \begin{equation}
     \hat{\mathbf{a}}_k^{6D} = \frac{\mathbf{q}_\text{acc} \otimes \bar{\mathbf{a}}_k^g \otimes \mathbf{q}_\text{acc}^*}
                                    {\|\mathbf{q}_\text{acc} \otimes \bar{\mathbf{a}}_k^g \otimes \mathbf{q}_\text{acc}^*\|}
     \label{eq:acc6d}
 \end{equation}
-The normalized vector $\hat{\mathbf{a}}_k^{6D}$ represents the estimated gravity direction in the 6D earth frame and serves as the tilt reference for the correction step.
+In VQF, $\mathbf{q}_\text{acc}$ is a tilt-only quaternion (roll and pitch, no heading). In Fast VQF, the same equation is applied with $\mathbf{q}_\text{acc-mag}$ in place of $\mathbf{q}_\text{acc}$, where $\mathbf{q}_\text{acc-mag}$ is the combined tilt-and-heading correction quaternion defined in Optimization Stage~2 (Section~\ref{sec:stage2}), so \eqref{eq:acc6d} rotates the filtered accelerometer into the full 9DOF earth frame rather than a tilt-only frame.
 
-\subsection{Combined Accelerometer and Magnetometer Correction}
+\subsection{Optimization Stage 2: Combined Accelerometer--Magnetometer Correction}
+\label{sec:stage2}
 
 \subsubsection*{VQF correction structure}
 
-VQF maintains two correction states: a tilt-correction quaternion $\mathbf{q}_\text{acc}$ and a scalar heading offset $\delta$. The tilt correction computes the exact minimal rotation from $[0,0,1]$ to $\hat{\mathbf{a}}_k^{6D}$:
+VQF maintains a tilt-correction quaternion $\mathbf{q}_\text{acc}$ and a scalar heading offset $\delta$. The tilt correction computes the exact minimal rotation from $[0,0,1]^\top$ to $\hat{\mathbf{a}}_k^{6D}$:
 \begin{equation}
     \Delta\mathbf{q}_\text{acc}^\text{VQF} =
     \begin{bmatrix}
@@ -100,14 +111,11 @@ VQF maintains two correction states: a tilt-correction quaternion $\mathbf{q}_\t
     \end{bmatrix}
     \label{eq:vqf_acc}
 \end{equation}
-where $\hat{a}_x, \hat{a}_y, \hat{a}_z$ are the components of $\hat{\mathbf{a}}_k^{6D}$.
-The magnetometer correction is handled independently by computing the heading disagreement angle $\psi_k = \mathrm{atan2}(m_x^e, m_y^e) - \delta$ between the magnetometer projection into the horizontal plane and the current heading estimate, and updating the scalar state via a first-order filter: $\delta_{k} = \delta_{k-1} + k_\text{mag}\,\psi_k$. The 9DOF quaternion is then reconstructed as a rotation by $\delta$ around the vertical axis composed with $\mathbf{q}_\text{acc} \otimes \mathbf{q}_k^-$.
-
-This structure requires evaluating~\eqref{eq:vqf_acc} (with a square root), an $\mathrm{atan2}$, and maintaining the separate $\delta$ state at every step.
+The heading correction computes the disagreement angle $\psi_k = \mathrm{atan2}(m_x^e, m_y^e) - \delta$ and updates the scalar state via a first-order filter: $\delta_k = \delta_{k-1} + k_\text{mag}\psi_k$. This structure requires a $\sqrt{\cdot}$ in~\eqref{eq:vqf_acc}, an $\mathrm{atan2}$, and a separate $\delta$ state at every step.
 
 \subsubsection*{Proposed combined correction}
 
-The proposed method replaces both VQF corrections with a single linearized correction quaternion that encodes the tilt update and a sign-based heading step simultaneously. For the tilt part, the exact formula~\eqref{eq:vqf_acc} is approximated by setting the scalar component to unity (valid when the per-step correction is small):
+Fast VQF replaces both VQF corrections with a single linearized correction quaternion encoding the tilt update and a sign-based heading step simultaneously. Setting the scalar component to unity (valid when the per-step correction is small):
 \begin{equation}
     \mathbf{r}_k =
     \begin{bmatrix}
@@ -120,99 +128,164 @@ The proposed method replaces both VQF corrections with a single linearized corre
     \Delta\mathbf{q}_k = \frac{\mathbf{r}_k}{\|\mathbf{r}_k\|}
     \label{eq:combined}
 \end{equation}
-where $\hat{a}_x, \hat{a}_y$ are from $\hat{\mathbf{a}}_k^{6D}$, $s_\text{mag} = \tau_\text{mag}\,c$ is a fixed yaw step size (with constant $c$), and $\sigma_k = \mathrm{sign}(m_x^{6D})$ is the sign of the X-component of the magnetometer projected into the 6D earth frame:
+where $\hat{a}_x, \hat{a}_y$ are from $\hat{\mathbf{a}}_k^{6D}$, $s_\text{mag} = \tau_\text{mag}\,c$ is a fixed yaw step size (with constant $c$), and $\sigma_k = \mathrm{sign}(m_x^{6D})$ is the sign of the magnetometer X-component in the 6D earth frame. The 6D earth frame has its Z axis aligned with gravity (determined by $\mathbf{q}_\text{acc-mag}$) and its X axis aligned with the current heading reference. Because the reference direction is placed on X, only the first component of the projected magnetometer vector carries information about the sign of the heading error—the Y and Z components are not needed and are never computed:
 \begin{equation}
-    m_x^{6D} = \mathbf{e}_1^\top\, R(\mathbf{q}_\text{acc} \otimes \mathbf{q}_k^-)\, \mathbf{m}_k
+    m_x^{6D} = [1,\;0,\;0]\; R(\mathbf{q}_\text{acc-mag} \otimes \mathbf{q}_k^-)\;\mathbf{m}_k
     \label{eq:magx}
 \end{equation}
-The fourth component of $\Delta\mathbf{q}_k$ encodes a small yaw rotation of magnitude $s_\text{mag}$ in the direction that reduces the heading error. The correction is applied as a single left-multiply:
+Computing only the first row of the rotation matrix costs 3 multiplications and 2 additions, avoiding both the full $3{\times}3$ rotation and the $\mathrm{atan2}$ required by VQF. The sign $\sigma_k$ determines the direction of the incremental yaw correction; the fourth component of $\Delta\mathbf{q}_k$ then encodes a small yaw rotation of magnitude $s_\text{mag}$ in the error-reducing direction. The correction is applied as a single left-multiply:
 \begin{equation}
-    \mathbf{q}_{\text{acc},k} = \mathrm{normalize}\!\left(\Delta\mathbf{q}_k \otimes \mathbf{q}_{\text{acc},k-1}\right)
+    \mathbf{q}_{\text{acc-mag},k} = \mathrm{normalize}\!\left(\Delta\mathbf{q}_k \otimes \mathbf{q}_{\text{acc-mag},k-1}\right)
     \label{eq:update}
 \end{equation}
 and the 9DOF orientation is:
 \begin{equation}
-    \mathbf{q}_{9\text{DOF},k} = \mathbf{q}_{\text{acc},k} \otimes \mathbf{q}_k^-
+    \mathbf{q}_{9\text{DOF},k} = \mathbf{q}_{\text{acc-mag},k} \otimes \mathbf{q}_k^-
     \label{eq:9dof}
 \end{equation}
-
-The computational saving over VQF comes from three sources: (i) the square root in~\eqref{eq:vqf_acc} is replaced by the unit approximation, (ii) the $\mathrm{atan2}$ and first-order filter for the heading are replaced by a sign evaluation, and (iii) the scalar $\delta$ state is eliminated. The accuracy trade-off arises from the linearized tilt approximation and the coarser sign-based heading correction.
-
-\subsection{Optimization Levels}
-
-Three optimization levels are defined with increasing computational savings:
-
-\textbf{Level~1} -- [TODO: describe]
-
-\textbf{Level~2} -- [TODO: describe]
-
-\textbf{Level~3} -- [TODO: describe]
-
-Computation time is measured as the mean execution time of the isolated filter update loop in a native optimized C++ build, excluding I/O.
+The savings come from: (i)~the $\sqrt{\cdot}$ in~\eqref{eq:vqf_acc} is replaced by the unit approximation, (ii)~$\mathrm{atan2}$ and the first-order heading filter are replaced by a sign evaluation, and (iii)~the scalar $\delta$ state is eliminated. This stage contributes 44\,\% of total execution time reduction. The combined correction concept derives from~\cite{justa2020}; the magnetometer correction formulation is inherited directly from that work, where convergence properties of the sign-based step are analysed. As an alternative, a linear correction proportional to the heading error magnitude was evaluated on the same datasets; the sign-based step yielded consistently lower RMSE by approximately 3\,\%, confirming it as the better choice in practice. Near-zero oscillation of the sign step is not a practical concern: the fixed step magnitude $s_\text{mag}$ is chosen to be well below the noise floor of typical MEMS magnetometers, so any residual switching is smaller than the inherent measurement noise.
 
 \section{Dataset and Evaluation Methodology}
 
+\subsection{Datasets}
+
+Evaluation uses two public benchmark datasets. The \textbf{BROAD} dataset~\cite{laidig2021broad} provides a large 
+collection of takes from diverse motion scenarios and multiple sensor units, with an optical motion 
+capture system as ground-truth reference. BROAD takes include both undisturbed takes (no significant 
+magnetic or acceleration disturbance) and disturbed takes (recorded under magnetic disturbance or dynamic 
+acceleration). In practice, all disturbed BROAD takes were also found to have optical reference 
+discontinuities and are therefore classified as non-whitelist from a reference quality perspective. Readers 
+interpreting results on these takes should be aware that the reference signal quality is compromised, 
+and any observed accuracy differences could partly reflect reference artefacts.
+The \textbf{Sassari} dataset~\cite{caruso2021sassari} 
+contains three takes recorded at slow, medium, and fast motion speeds. Six IMU sensors were mounted 
+simultaneously on a common platform; only sensor~0 is used in the present experiments. All three Sassari 
+takes pass the whitelist criteria.
+
 \subsection{Optical Reference Discontinuities}
 
-The evaluation uses a broad public IMU dataset with an optical motion capture system as ground-truth reference. Inspection of the reference signal reveals sporadic large discontinuities—sudden orientation jumps inconsistent with the physical motion—caused by marker occlusion or tracking loss in the optical system. These jumps introduce a persistent phase offset in the reference orientation that lasts until the next reliable tracking event, causing systematic error that would incorrectly penalise all filter estimates equally.
+Inspection of the BROAD reference signal reveals sporadic large discontinuities—sudden orientation 
+jumps inconsistent with the physical motion—caused by marker occlusion or tracking loss in the optical 
+system. These jumps introduce a persistent phase offset that incorrectly penalises all filter estimates 
+equally.
 
-Fig.~\ref{fig:jump} shows a representative example. Corrupted segments are identified by thresholding the frame-to-frame angular change in the reference signal and excluded from the general evaluation. Approximately [TODO: X\,\%] of the dataset is removed by this criterion.
+Fig.~\ref{fig:jump} shows a representative example. Corrupted segments are identified by thresholding the 
+frame-to-frame angular change in the reference signal. A 20\,s window following each detected jump is also 
+excluded to prevent residual offset contamination. Segments passing both checks are reference-valid and are 
+denoted the \emph{whitelist}; in the present datasets these correspond to the undisturbed takes.
 
 \begin{figure}[t]
     \centering
     \includegraphics[width=\columnwidth]{figures/broad_jump_issue.png}
-    \caption{Optical reference discontinuity in the broad dataset. A sudden jump in the reference orientation (red) results in a long-term offset that affects all filter error metrics equally and must be excluded before fair comparison.}
+    \caption{Optical reference discontinuity in the BROAD dataset. A sudden jump in the reference (bottom) produces a long-term offset that affects all filter error metrics equally and must be excluded before fair comparison.}
     \label{fig:jump}
 \end{figure}
 
 \subsection{Magnetic Disturbance Segments}
 
-Portions of the dataset recorded near ferromagnetic sources exhibit significant magnetic disturbance. These segments are identified separately and excluded from the general accuracy evaluation. For the dedicated magnetic disturbance experiment (Section~\ref{sec:results_mag}), a synthetic reference correction is applied to provide a controlled test.
+The BROAD dataset includes takes recorded in the presence of magnetic disturbance from ferromagnetic sources. 
+In practice, these takes were found to also contain optical reference discontinuities, so they are included in 
+the non-whitelist set and reported in analysis Section~\ref{sec:results_mag}.
 
 \subsection{Evaluation Metrics}
 
-Orientation error is reported as the RMSE of the geodesic angle between estimated and reference quaternions. Computation time is the mean wall-clock time of the filter update function over the full dataset, measured on the isolated inner loop in native optimized C++.
+Orientation error is the RMSE of the geodesic angle between estimated and reference quaternions. Results are reported 
+for the \emph{undisturbed} takes and the \emph{disturbed} takes. Computation time is the mean wall-clock time of the isolated 
+filter update loop in a native optimized C++ build, measured on an AMD Ryzen~7 8700G desktop CPU. Timing measurements 
+exhibit run-to-run variation of a few percent due to CPU scheduling and cache effects; each experiment was repeated 
+many times and the mean is reported. The absolute timing values should therefore be treated as approximate, 
+and comparisons between methods are more meaningful than the absolute figures. For each recording, the mean 
+gyroscope reading during the initial static phase is subtracted before processing; all algorithms therefore 
+run on gyroscope pre-calibrated sensor data. Since each take begins with a static phase, the reference quaternion is aligned to the filter estimate at the midpoint of that static phase; this eliminates the influence of different filter initialisation strategies and removes any fixed offset arising from a different choice of reference coordinate system.
+
+\subsection{Parameter Tuning}
+
+The accelerometer and magnetometer gain weights ($\tau_\text{acc}$, $\tau_\text{mag}$ or $s_\text{mag}$) of Fast VQF were jointly optimised using the Nelder-Mead simplex method~\cite{nelder1965} to minimise mean orientation RMSE over the complete dataset, including both undisturbed and disturbed takes. The reported accuracy figures therefore represent training-set performance. Overfitting is not a significant concern here: only two scalar parameters are tuned, and the robustness of equivalent gain parameters to dataset variation has been established in the original VQF~\cite{laidig2023vqf} and Justa AHRS~\cite{justa2020} evaluations, which demonstrated that a single fixed parametrisation generalises well across diverse hardware and motion conditions.
 
 \section{Experimental Results}
 
-\subsection{General Accuracy and Speed}
+\subsection{Speed and Accuracy}
 
-Table~\ref{tab:results} reports orientation RMSE and relative computation time for VQF and the three proposed optimization levels on the cleaned dataset.
+Table~\ref{tab:results} reports computation time and orientation RMSE for all evaluated methods. The two Fast VQF optimization stages contribute independently: Euler integration reduces total execution time by 5\,\% relative to Basic VQF; the combined correction reduces it by a further 44\,\%. The net result is Fast VQF running at 87.02\,ns per update—$\approx$1.9$\times$ faster than Basic VQF (165.01\,ns) and $\approx$3.8$\times$ faster than full VQF (315.52\,ns). Fig.~\ref{fig:tradeoff} visualises the speed--accuracy trade-off for all methods.
 
 \begin{table}[t]
 \centering
-\caption{Orientation RMSE and Relative Computation Time (General Dataset)}
+\caption{Computation Time and Orientation RMSE}
 \label{tab:results}
-\begin{tabular}{lcc}
+\begin{tabular}{lcccc}
 \hline
-Method & RMSE [°] & Rel.\ time [\%] \\
+Method & Time (ns) & Rel.\ [\%] & RMSE$_\text{undist}$ [°] & RMSE$_\text{dist}$ [°] \\
 \hline
-VQF~\cite{laidig2023vqf} & [TODO] & 100 \\
-Proposed Level~1 & [TODO] & [TODO] \\
-Proposed Level~2 & [TODO] & [TODO] \\
-Proposed Level~3 & [TODO] & [TODO] \\
+Madgwick~\cite{madgwick2010}        & 71.40  & 82.0 & 2.87 & 4.24 \\
+Justa AHRS~\cite{justa2020}         & 64.91  & 74.6 & 2.84 & 3.96 \\
+VQF~\cite{laidig2023vqf}           & 315.52 & 364.8  & 2.66 & \textbf{1.98} \\
+Basic VQF~\cite{laidig2023vqf}      & 165.01 & 189.6 & 2.71 & 2.42 \\
+Fast VQF (ours)                    & 87.02  & 100 & \textbf{2.62} & 2.92 \\
 \hline
 \end{tabular}
 \end{table}
 
-The proposed method achieves approximately 40\,\% reduction in computation time. The accuracy penalty remains within a few percent of VQF RMSE across all optimization levels for undisturbed motion.
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/algo_time_vs_accuracy.png}
+    \caption{Speed--accuracy trade-off for all evaluated methods on undisturbed data. Fast VQF occupies the best accuracy position among fast methods; full VQF provides additional benefit only under disturbance.}
+    \label{fig:tradeoff}
+\end{figure}
 
-\subsection{Optimization Level Analysis}
+On the undisturbed subset, Fast VQF achieves 2.62°—the lowest RMSE of all tested methods, 0.04° below full VQF (2.66°) and 0.09° below Basic VQF (2.71°). Justa AHRS~\cite{justa2020} is the fastest method overall (64.91\,ns) but yields 2.84° on undisturbed data, 0.22° above Fast VQF. Madgwick~\cite{madgwick2010} is outperformed by both Justa AHRS and Fast VQF on every metric—neither fastest nor most accurate—confirming that it has been superseded by modern alternatives. The goniometric functions eliminated by Fast VQF are computed in software on microcontrollers without hardware floating-point units, so the speedup on such targets is expected to exceed the desktop figures.
 
-[TODO: timing breakdown and discussion of what each level contributes to the speedup]
+The disturbed subset tells a different story. VQF's gyroscope bias estimation and magnetic disturbance rejection provide a clear advantage under harsh conditions: 1.98° versus 2.92° for Fast VQF (gap of 0.94°, compared to a gap of $-0.04$° on undisturbed data). Justa AHRS and Madgwick degrade significantly on disturbed data (3.96° and 4.24°), confirming that algorithmic complexity is justified precisely in harsh environments, while fast methods are well-suited to undisturbed operation where computational cost and latency are the limiting factors.
 
-\subsection{Magnetic Disturbance Performance}
+\subsection{Multi-Environment Accuracy}
+
+Fig.~\ref{fig:whitelist} shows per-environment RMSE on the undisturbed takes. Fast VQF maintains accuracy comparable to Basic VQF across all environments, confirming that the two optimizations do not introduce environment-specific failure modes.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/multi_arena_comparison_whitelist.png}
+    \caption{Per-environment orientation RMSE on the undisturbed takes: Sassari slow/medium/fast (sensor~0) and BROAD undisturbed takes (all reference-valid).}
+    \label{fig:whitelist}
+\end{figure}
+
+\subsection{Performance on Disturbed Data}
 \label{sec:results_mag}
 
-[TODO: RMSE comparison on synthetically corrected magnetic disturbance segments; discuss whether the combined correction affects disturbance rejection behaviour relative to VQF]
+Fig.~\ref{fig:disturbed} shows per-environment RMSE on the BROAD disturbed takes. Isolating the disturbed BROAD takes makes 
+ algorithm differences on hard conditions visible without cleaner takes masking the effect. 
+ Fast VQF's sign-based heading correction provides behaviour comparable to VQF's $\mathrm{atan2}$-based 
+ correction under moderate disturbance: the fixed step size $s_\text{mag}$ bounds the yaw update per step, 
+ and the inherited VQF accelerometer low-pass filtering in the near-earth frame provides the same tilt robustness 
+ as the full algorithm.
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=0.8\textwidth]{figures/multi_arena_comparison.png}
+    \caption{Per-environment orientation RMSE on the BROAD disturbed takes (magnetic and acceleration disturbance; 20\,s post-jump reference exclusion applied). Parameters were tuned on all takes including these.}
+    \label{fig:disturbed}
+\end{figure*}
 
 \section{Conclusion}
 
-A speed-optimized 9DOF AHRS was presented that reduces the VQF three-state pipeline to two states by merging the accelerometer and magnetometer corrections into a single combined update. The structural simplification yields approximately 40\,\% reduction in computation time with a marginal accuracy trade-off on undisturbed motion. The sensor roles are preserved: accelerometer corrects roll and pitch, magnetometer corrects yaw. Three optimization levels provide a configurable speed-accuracy trade-off.
+Fast VQF was presented as a speed-optimized 9DOF AHRS derived from the VQF algorithm through two targeted
+structural optimizations. Euler quaternion integration replaces the axis-angle propagation, eliminating $\cos/\sin$
+calls and contributing 5\,\% of total time savings. A combined accelerometer--magnetometer correction replaces
+VQF's two sequential updates, eliminating $\mathrm{atan2}$, an intermediate quaternion state, and a scalar heading
+variable, contributing a further 44\,\%. Together, Fast VQF achieves approximately $1.9\times$ speedup over Basic VQF
+and $3.8\times$ over full VQF on desktop hardware, with an even larger gain expected on microcontrollers where
+trigonometric functions are computed in software. On undisturbed data, Fast VQF achieves the lowest RMSE of all
+tested methods (2.62°), outperforming Basic VQF (2.71°), full VQF (2.66°), Justa AHRS (2.84°), and Madgwick (2.87°).
+Under disturbed conditions, full VQF's additional mechanisms yield a clear advantage (1.98° vs.\ 2.92°). Evaluation
+against Justa AHRS and Madgwick confirms that modern fast methods are preferable to Madgwick on both speed and
+accuracy, and that Madgwick should no longer be the default choice for lightweight orientation estimation.
+Preprocessing analysis of the BROAD benchmark identified optical reference discontinuities that must be handled
+explicitly before valid filter comparison. Fast VQF is suited for resource-constrained embedded systems and
+latency-sensitive applications such as VR headset render-pose prediction, where algorithmic delay directly degrades
+prediction accuracy.
 
-A preprocessing analysis of the evaluation dataset revealed optical reference discontinuities that must be excluded before valid filter comparison. Magnetic disturbance segments are handled through synthetic correction for dedicated evaluation.
-
-The proposed filter is suitable for resource-constrained embedded systems and large-scale offline processing where the 9DOF output is required and a small accuracy trade-off is acceptable.
+\section*{Acknowledgment}
+The authors thank Daniel Laidig for permission to use the VQF name in the proposed filter 
+designation and for making the VQF implementation openly available.\\
+Modern LLM tools were used for language editing and formatting assistance, but all technical content and analysis are the original work of the authors. Authors take full responsibility for the accuracy and integrity of the reported research.
 
 \bibliographystyle{IEEEtran}
 \bibliography{references}

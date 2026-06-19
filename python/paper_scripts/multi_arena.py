@@ -12,14 +12,17 @@ sys.path.insert(1, os.path.join(_python_dir, 'vqf_local'))
 from dataset_loader import DatasetLoader
 
 from vqf import VQF
-from utils import angle_error
+from utils import angle_error, get_optim_params_all, FilterType, get_color_sequence
 
 RMSE = True
-DISTURB_INCLUDED = False
+DISTURB_INCLUDED = True  # Set to True to include disturbed datasets, False for whitelisted datasets
 base_fold = 'paper_j2\\figures\\'
 
 test_datasets = {}
 dataset_loader = DatasetLoader()
+
+transparent = {'Madgwick'}
+color_sequence = get_color_sequence()
 
 if DISTURB_INCLUDED:
     black_list = dataset_loader.broad_black_under_thresh(0.2)
@@ -28,30 +31,22 @@ if DISTURB_INCLUDED:
         if dataset is not None:
             test_datasets[file] = dataset
 
-    test_filters = {
-        'FAST VQF (ours)': {'filter': {'tauAcc': 1.789708, 'tauMag': 0.518741}, 'errors': [], 'type': 1, 'just': True, 'base': True},
-        'Base VQF': {'filter': {'tauAcc': 1.551290, 'tauMag': 6.610907}, 'errors': [], 'type': 1, 'just': False, 'base': True},
-        'VQF': {'filter': {'tauAcc': 1.709970, 'tauMag': 4.455498}, 'errors': [], 'type': 1, 'just': False, 'base': False},
-        }
+    test_filters = get_optim_params_all()
 else:
-    names = ['slow_v4.mat', 'medium_v4.mat', 'fast_v4.mat']
+    names = {'slow_v4.mat':'sassari_slow', 'medium_v4.mat':'sassari_medium', 'fast_v4.mat':'sassari_fast'}
     for i in range(1):
-        for n in names:    
-            dat = dataset_loader.load_sassari_dataset(n, i)
-            test_datasets[n+str(i)] = dat
+        for k, n in names.items():    
+            dat = dataset_loader.load_sassari_dataset(k, i)
+            test_datasets[n] = dat
 
     broad_white = dataset_loader.broad_white_list_datasets()
     for i in range(4):
         file = broad_white[i]
         dat = dataset_loader.load_broad_dataset(file_name=file, mean_initial_samples=True)
         if dat is not None:
-            test_datasets[file] = dat
+            test_datasets['br_'+file] = dat
             
-    test_filters = {
-        'FAST VQF (ours)': {'filter': {'tauAcc': 1.474445, 'tauMag': 0.402520}, 'errors': [], 'type': 1, 'just': True, 'base': True},
-        'Base VQF': {'filter': {'tauAcc': 1.286885, 'tauMag': 3.823853}, 'errors': [], 'type': 1, 'just': False, 'base': True},
-        'VQF': {'filter': {'tauAcc': 1.414466, 'tauMag': 3.409999}, 'errors': [], 'type': 1, 'just': False, 'base': False},
-        }
+    test_filters = get_optim_params_all()
     
 single_dataset = len(test_datasets)==1
 
@@ -88,12 +83,12 @@ for dataset_name, dataset in test_datasets.items():
         acc = np.ascontiguousarray(dat['accelerometer'], dtype=np.float64)
         mag = np.ascontiguousarray(dat['magnetometer'], dtype=np.float64)
         
-        not_base = not j_filter['base']
+        vqf_full = j_filter['filter_type'] == FilterType.FILTER_VQF
         start_time = time.time()
         vq = VQF(1.0/dat['mean_sampling_rate'], 
                     tauAcc=j_filter['filter']['tauAcc'], tauMag=j_filter['filter']['tauMag'],
-                    motionBiasEstEnabled=not_base, restBiasEstEnabled=not_base,
-                    magDistRejectionEnabled=not_base, useJustaFilter= j_filter['just'])
+                    motionBiasEstEnabled=vqf_full, restBiasEstEnabled=vqf_full,
+                    magDistRejectionEnabled=vqf_full, filterType=int(j_filter['filter_type']))
 
         res = vq.updateBatch(gyr, acc, mag)
         result = res['quat9D']
@@ -160,22 +155,24 @@ else:
 
     if DISTURB_INCLUDED:
         fig, ax = plt.subplots(figsize=(8, 5))
-        fig.suptitle('Filter Performance Across Disturbed Datasets (fixed)')
+        fig.suptitle('Filter Performance Across Disturbed Takes (BROAD fixed)')
         
         for i, (filter_name, j_filter) in enumerate(test_filters.items()):
             ls = linestyles[i % len(linestyles)]
             mk = markers[i % len(markers)]
+            color = color_sequence[i % len(color_sequence)]
             ax.plot(range(len(dataset_keys)), j_filter['errors'], label=filter_name,
-                    linestyle=ls, marker=mk, markersize=4)
+                    linestyle=ls, marker=mk, color=color, markersize=4, alpha=0.3 if filter_name in transparent else 1.0)
     else:
         fig, ax = plt.subplots(figsize=(6, 5))
-        fig.suptitle('Filter Performance Across Whitelisted Datasets')
+        fig.suptitle('Filter Performance Across Undisturbed Takes')
         
         for i, (filter_name, j_filter) in enumerate(test_filters.items()):
             ls = linestyles[i % len(linestyles)]
             mk = markers[i % len(markers)]
+            color = color_sequence[i % len(color_sequence)]
             ax.plot(range(len(dataset_keys)), j_filter['errors'], label=filter_name,
-                    linestyle=ls, marker=mk, markersize=4)
+                    linestyle=ls, marker=mk, color=color, markersize=4, alpha=0.3 if filter_name in transparent else 1.0)
 
     ax.set_ylabel('RMSE (deg)')
     ax.set_xticks(range(len(dataset_keys)))
@@ -187,7 +184,8 @@ else:
     plt.savefig(base_fold + filename, dpi=300)
     plt.show()
 
+print("\nMean Errors Across Datasets:")
 for filter_name, j_filter in test_filters.items():
-    print(f"{filter_name} Mean Error across datasets: {np.mean(j_filter['errors']):.2f} deg")
+    print(f"{filter_name} Mean: {np.mean(j_filter['errors']):.2f} deg")
 
 

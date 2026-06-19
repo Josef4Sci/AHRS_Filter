@@ -11,7 +11,7 @@ from vqf import VQF as PyVQF
 import numpy as np
 import pandas as pd
 from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure
-from utils import angle_error, eval_filter_on_dataset
+from utils import FilterType, angle_error, eval_filter_on_dataset, get_optim_params_all
 
 RMSE = True
 DOF6 = False
@@ -19,12 +19,12 @@ DOF6 = False
 test_datasets = {}
 dataset_loader = DatasetLoader()
 
-sl = dataset_loader.load_justa_raw(0)
-fast = dataset_loader.load_justa_raw(1)
-dist = dataset_loader.load_justa_raw(2)
-test_datasets['j_slow'] = sl
-test_datasets['j_fast'] = fast
-test_datasets['j_dist'] = dist
+# sl = dataset_loader.load_justa_raw(0)
+# fast = dataset_loader.load_justa_raw(1)
+# dist = dataset_loader.load_justa_raw(2)
+# test_datasets['j_slow'] = sl
+# test_datasets['j_fast'] = fast
+# test_datasets['j_dist'] = dist
 
 broad_white = dataset_loader.broad_white_list_datasets()
 for i in range(4):
@@ -52,11 +52,7 @@ if DOF6:
         'justa_cpp': {'filter': None, 'errors': [], 'type': 1, 'par1': True},
     }
 else:
-    test_filters = { # 9DOF
-    'vqf': {'filter': {'tauAcc': 0.886012, 'tauMag': 3.720125}, 'errors': [], 'type': 1, 'par1': False},
-    #'vqf': {'filter': {'tauAcc': 0.96332, 'tauMag': 6.47}, 'errors': [], 'type': 1, 'par1': False},
-    'justa_cpp': {'filter': {'tauAcc': 1.882, 'tauMag': 0.23}, 'errors': [], 'type': 1, 'par1': True},
-    }
+    test_filters = get_optim_params_all()
     
 single_dataset = len(test_datasets)==1
 
@@ -96,7 +92,7 @@ for dataset_name, dataset in test_datasets.items():
             vq = PyVQF(1.0/dat['mean_sampling_rate'], 
                        tauAcc=j_filter['filter']['tauAcc'], tauMag=j_filter['filter']['tauMag'],
                        motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False,
-                       useJustaFilter= j_filter['par1'])
+                       filterType=int(j_filter['filter_type']))
             if DOF6:
                 res = vq.updateBatch(gyr, acc)
                 result = res['quat6D']

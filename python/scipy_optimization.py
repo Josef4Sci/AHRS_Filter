@@ -13,7 +13,7 @@ from dataset_loader import DatasetLoader
 from filters import (JustaAHRSInvFast, JustaAHRSPure, JustaAHRSv3)
 
 from turbo_data import TuRBO_BO
-from utils import angle_error, eval_filter_on_dataset
+from utils import FilterType, angle_error, eval_filter_on_dataset
 from matplotlib import pyplot as plt
 import pandas as pd
 
@@ -69,9 +69,21 @@ def objective_function(params, datasets):
             acc = np.ascontiguousarray(dat['accelerometer'], dtype=np.float64)
             mag = np.ascontiguousarray(dat['magnetometer'], dtype=np.float64)
             
+            filter = FilterType.FILTER_FAST_VQF  # Change this to the desired filter type
+            
+            motionBiasEstEnabled = True if filter == FilterType.FILTER_VQF else False
+            restBiasEstEnabled = True if filter == FilterType.FILTER_VQF else False
+            magDistRejectionEnabled = True if filter == FilterType.FILTER_VQF else False
+            
+            if filter == FilterType.FILTER_FAST_VQF or filter == FilterType.FILTER_JUSTA_ORIG:
+                gyro_int = 1 
+            else:
+                gyro_int = 0
+            
             b = PyVQF(1.0/dat['mean_sampling_rate'], tauAcc=params[0], tauMag=params[1], 
-                        motionBiasEstEnabled=False, restBiasEstEnabled=False, magDistRejectionEnabled=False,
-                        useJustaFilter=True, useAccLp=False, gyroIntegrationMethod=1)
+                        motionBiasEstEnabled=motionBiasEstEnabled, restBiasEstEnabled=restBiasEstEnabled,
+                        magDistRejectionEnabled=magDistRejectionEnabled,
+                        filterType=int(filter), gyroIntegrationMethod=gyro_int)
             
             if DOF6:
                 res = b.updateBatch(gyr, acc)
@@ -222,11 +234,11 @@ if __name__ == "__main__":
             test_datasets[file] = dat
 
 
-    black_list = dataset_loader.broad_black_under_thresh(0.2)
-    for ind, file in enumerate(black_list):
-        dataset = dataset_loader.load_broad_dataset(file, bypass_black_list=True)
-        if dataset is not None:
-            test_datasets[file] = dataset
+    # black_list = dataset_loader.broad_black_under_thresh(0.2)
+    # for ind, file in enumerate(black_list):
+    #     dataset = dataset_loader.load_broad_dataset(file, bypass_black_list=True)
+    #     if dataset is not None:
+    #         test_datasets[file] = dataset
 
     dataset_loader = DatasetLoader()
     names = ['slow_v4.mat', 'medium_v4.mat', 'fast_v4.mat']

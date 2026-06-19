@@ -10,7 +10,7 @@ from vqf import VQF
 import numpy as np
 import pandas as pd
 from filters.justa_ahrs import JustaAHRSInvFast, JustaAHRSInv, JustaAHRSPure
-from utils import angle_error, eval_filter_on_dataset, plot_dataset
+from utils import FilterType, angle_error, eval_filter_on_dataset, plot_dataset
 
 
 RMSE = True
@@ -18,7 +18,7 @@ RMSE = True
 dataset_loader = DatasetLoader()
 names = ['slow_v4.mat', 'medium_v4.mat', 'fast_v4.mat']
 test_datasets={}
-for i in range(6):
+for i in range(1):
     for n in names:    
         dat = dataset_loader.load_sassari_dataset(n, i)
         bias = dat['gyroscope'][:500].mean(axis=0)
@@ -32,9 +32,9 @@ for i in range(6):
 #plot_dataset(test_datasets[single_test])
 
 test_filters = { # 9DOF
-    'vqf': {'filter': {'tauAcc': 1.2, 'tauMag': 7.0}, 'errors': [], 'type': 1, 'justa': False},
-    'justa_cpp': {'filter': {'tauAcc': 1.882, 'tauMag': 0.23}, 'errors': [], 'type': 1, 'justa': True},
-    #'justa_inv':  {'filter': JustaAHRSInvFast(w_acc=1, w_mag=1), 'errors': [], 'type': 0},
+'mad': {'filter': {'tauAcc': 1.258081, 'tauMag': 9.9}, 'errors': [], 'type': 1, 'filter_type': FilterType.FILTER_MADGWICK},
+'basic vqf': {'filter': {'tauAcc': 1.28, 'tauMag': 4.0}, 'errors': [], 'type': 1, 'filter_type': FilterType.FILTER_BASIC_VQF},
+'justa_cpp': {'filter': {'tauAcc': 1.8, 'tauMag': 0.5}, 'errors': [], 'type': 1, 'filter_type': FilterType.FILTER_FAST_VQF},
 }
 
 single_dataset = len(test_datasets)==1
@@ -57,7 +57,7 @@ for dataset_name, dat in test_datasets.items():
             
             vq = VQF(1/100, tauAcc=j_filter['filter']['tauAcc'], tauMag=j_filter['filter']['tauMag'],
                      motionBiasEstEnabled=False, restBiasEstEnabled=False,
-                     magDistRejectionEnabled=False, useJustaFilter=j_filter['justa'])
+                     magDistRejectionEnabled=False, filterType=int(j_filter['filter_type']))
                       
             res = vq.updateBatch(gyr, acc, mag)
             result = res['quat9D']
